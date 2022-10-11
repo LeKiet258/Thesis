@@ -183,8 +183,8 @@ def get_args():
     parser.add_argument("--data-root", type=str, required=True, dest="root")
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr")
-    parser.add_argument("--learning-rate-scheduler", type=str, default="true", dest="lrs")
+    parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr") # lr0: steps start out large, which makes quick progress and escape local minima
+    parser.add_argument("--learning-rate-scheduler", type=str, default="true", dest="lrs") # có dùng lr scheduler ko
     parser.add_argument("--learning-rate-scheduler-minimum", type=float, default=1e-6, dest="lrs_min")
     parser.add_argument("--multi-gpu", type=str, default="false", dest="mgpu", choices=["true", "false"])
     parser.add_argument("--exist-ok", action='store_true', help='allow override trained_weights folder? default: false')
