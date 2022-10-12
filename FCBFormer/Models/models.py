@@ -109,8 +109,7 @@ class TB(nn.Module):
 
         super().__init__()
 
-        # backbone: sdụng pvt_v2_b3
-        backbone = pvt_v2.PyramidVisionTransformerImpr(
+        backbone = pvt_v2.PyramidVisionTransformerV2(
             patch_size=4,
             embed_dims=[64, 128, 320, 512],
             num_heads=[1, 2, 5, 8],
@@ -119,31 +118,18 @@ class TB(nn.Module):
             norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
             depths=[3, 4, 18, 3],
             sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1
         )
 
         checkpoint = torch.load("pvt_v2_b3.pth")
-        model_dict = backbone.state_dict()
-        state_dict = {k: v for k, v in checkpoint.items() if k in model_dict.keys()} # note: class PVTV2Impr đã bỏ đi head
-        
-        model_dict.update(state_dict)
         backbone.default_cfg = _cfg()
-        backbone.load_state_dict(model_dict)
-        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1] # remove cái gì ?????????
+        backbone.load_state_dict(checkpoint)
+        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1]
         # print(f"BACKBONE: {self.backbone}")
         # intentional_err
-        
-        # self.backbone = pvt_v2_b3() 
-        # checkpoint = torch.load("pvt_v2_b3.pth")
-        # model_dict = self.backbone.state_dict()
-        # state_dict = {k: v for k, v in checkpoint.items() if k in model_dict.keys()}
-        # model_dict.update(state_dict)
-        # self.backbone.load_state_dict(model_dict)
 
         for i in [1, 4, 7, 10]:
             self.backbone[i] = torch.nn.Sequential(*list(self.backbone[i].children()))
 
-        # LE block
         self.LE = nn.ModuleList([])
         for i in range(4):
             self.LE.append(
@@ -152,7 +138,6 @@ class TB(nn.Module):
                 )
             )
 
-        # SFA block
         self.SFA = nn.ModuleList([])
         for i in range(3):
             self.SFA.append(nn.Sequential(RB(128, 64), RB(64, 64)))
@@ -160,22 +145,17 @@ class TB(nn.Module):
     def get_pyramid(self, x):
         pyramid = []
         B = x.shape[0]
-
-        for i, module in enumerate(self.backbone): # through 4 stage
-            # print(f"{i}{i}{i}{i}")
-            # print(f"shape: {x.shape}")
-            # print(f"module: {module}")
+        for i, module in enumerate(self.backbone):
             if i in [0, 3, 6, 9]:
                 x, H, W = module(x)
             elif i in [1, 4, 7, 10]:
                 for sub_module in module:
-                    # print(f"sub_module: {sub_module}")
                     x = sub_module(x, H, W)
             else:
                 x = module(x)
                 x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
                 pyramid.append(x)
-
+        
         return pyramid
 
     def forward(self, x):

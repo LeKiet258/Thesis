@@ -162,7 +162,7 @@ def train(args):
         if args.lrs == "true": # nếu có dùng learning rate scheduler -> update lr according to the scheduling scheme
             scheduler.step(test_measure_mean)
         if prev_best_test == None or test_measure_mean > prev_best_test: # save current best
-            print("Saving...")
+            print(f"...Saving best weights to trained_weights/FCBFormer_{args.dataset}{file_cnt}.pt")
             torch.save(
                 {
                     "epoch": epoch,
@@ -175,6 +175,20 @@ def train(args):
                 f"trained_weights/FCBFormer_{args.dataset}{file_cnt}.pt",
             )
             prev_best_test = test_measure_mean
+        
+        # save last.pt
+        print(f"...Saving epoch {epoch}")
+        torch.save(
+                {
+                    "epoch": epoch,
+                    "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
+                    "optimizer_state_dict": optimizer.state_dict(),
+                    "loss": loss,
+                    "test_measure_mean": test_measure_mean,
+                    "test_measure_std": test_measure_std,
+                },
+                f"trained_weights/last.pt",
+            )
 
 
 def get_args():
