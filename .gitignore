@@ -1,0 +1,8 @@
+Predictions/
+Worst cases/
+data/
+explained_code/
+trained_weights/
+__pycache__/
+FCBFormer.ipynb
+pvt_v2_b3.pth
