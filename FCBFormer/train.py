@@ -70,11 +70,7 @@ def test(model, device, test_loader, epoch, perf_measure):
 
 def build(args):
     '''Prepare data (train + val), model, optimizer, loss, metric in under the form of functions'''
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-    else:
-        device = torch.device("cpu")
-
+    device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
     img_path = args.root + "images/*"
     input_paths = sorted(glob.glob(img_path))
     depth_path = args.root + "masks/*"
@@ -184,10 +180,9 @@ def train(args):
                     "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": loss,
-                    "test_measure_mean": test_measure_mean,
-                    "test_measure_std": test_measure_std,
+                    "test_measure_mean": prev_best_test # current best, not this epoch's dice
                 },
-                f"trained_weights/last.pt",
+                f"trained_weights/last_{args.dataset}{file_cnt}.pt",
             )
 
 
