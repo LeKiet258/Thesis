@@ -22,7 +22,11 @@ class SGELU(nn.Module):
         return self.alpha*input * torch.tanh(math.sqrt(2/math.pi)*(input+0.044715*(input**3)))
  
 class Mlp(nn.Module):
+<<<<<<< HEAD
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0., linear=False):
+=======
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=SGELU, drop=0., linear=False):
+>>>>>>> sgelu
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -144,7 +148,11 @@ class Attention(nn.Module):
 class Block(nn.Module):
 
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
+<<<<<<< HEAD
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, linear=False):
+=======
+                 drop_path=0., act_layer=SGELU, norm_layer=nn.LayerNorm, sr_ratio=1, linear=False):
+>>>>>>> sgelu
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(

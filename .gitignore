@@ -3,5 +3,9 @@ Worst cases/
 data/
 explained_code/
 trained_weights/
+<<<<<<< HEAD
+=======
+__pycache__/
+>>>>>>> sgelu
 FCBFormer.ipynb
 pvt_v2_b3.pth

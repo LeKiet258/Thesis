@@ -184,10 +184,16 @@ def train(args):
                     "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": loss,
+<<<<<<< HEAD
                     "test_measure_mean": test_measure_mean,
                     "test_measure_std": test_measure_std,
                 },
                 f"trained_weights/last.pt",
+=======
+                    "test_measure_mean": prev_best_test # current best, not this epoch's dice
+                },
+                f"trained_weights/last_{args.dataset}{file_cnt}.pt",
+>>>>>>> sgelu
             )
 
 

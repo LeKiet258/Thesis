@@ -1,2 +1,0 @@
-trained_weights/ filter=lfs diff=lfs merge=lfs -text
-pvt_v2_b3.pth filter=lfs diff=lfs merge=lfs -text
