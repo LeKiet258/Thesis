@@ -12,7 +12,7 @@ from Data import dataloaders
 from Models import models
 from Metrics import performance_metrics
 from Metrics import losses
-
+import re
 
 def train_epoch(model, device, train_loader, optimizer, epoch, Dice_loss, BCE_loss):
     t = time.time()
@@ -71,13 +71,13 @@ def test(model, device, test_loader, epoch, perf_measure):
 def build(args):
     '''Prepare data (train + val), model, optimizer, loss, metric in under the form of functions'''
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    img_path = args.root + "images/*"
+    img_path = args.train_set + "images/*"
     input_paths = sorted(glob.glob(img_path))
-    depth_path = args.root + "masks/*"
+    depth_path = args.train_set + "masks/*"
     target_paths = sorted(glob.glob(depth_path))
 
     train_dataloader, _, val_dataloader = dataloaders.get_dataloaders(
-        input_paths, target_paths, batch_size=args.batch_size
+        input_paths, target_paths, batch_size=args.batch_size, is_train=True
     )
 
     Dice_loss = losses.SoftDiceLoss()
@@ -105,6 +105,21 @@ def build(args):
             Dice_loss, BCE_loss,
             perf, model, optimizer, checkpoint)
 
+def file_weight_cnt(weight_name):
+    '''đếm file trùng tên, VD: [mix.pt, mix_1.pt]. Note: nếu xoá file best_weight thì fải xoá luôn last.pt thì hàm này chạy mới đúng'''
+    file_cnt = 0
+    # prepare path to save weight
+    if not os.path.exists("./trained_weights"):
+        os.makedirs("./trained_weights")
+    else:
+        existing_weights = os.listdir("./trained_weights")
+        patt = f"{weight_name}(_\d)?.pt" 
+        for weight_file in existing_weights: # VD: [mix.pt, mix_1.pt, CIM.pt]
+            if re.match(patt, weight_file): 
+                file_cnt += 1
+
+    file_cnt = '' if file_cnt == 0 else f'_{file_cnt}'
+    return file_cnt
 
 def train(args):
     (
@@ -119,16 +134,8 @@ def train(args):
         checkpoint # if any, else: None
     ) = build(args)
 
-    # prepare path to save weight
-    file_cnt = 0 # keep track of file weight, avoid overriding
-    if not os.path.exists("./trained_weights"):
-        os.makedirs("./trained_weights")
-    else:
-        existing_weights = os.listdir("./trained_weights")
-        for weight_file in existing_weights:
-            if args.dataset in weight_file:
-                file_cnt += 1
-    file_cnt = '' if file_cnt == 0 else f'_{file_cnt}'
+    # keep track of file weight, avoid overriding
+    file_cnt = file_weight_cnt(args.name) 
 
     # nếu có dùng learning rate scheduler
     if args.lrs == "true":
@@ -153,12 +160,12 @@ def train(args):
             loss = train_epoch(model, device, train_dataloader, optimizer, epoch, Dice_loss, BCE_loss)
             test_measure_mean, test_measure_std = test(model, device, val_dataloader, epoch, perf)
         except KeyboardInterrupt:
-            print("Training interrupted by user")
+            print("\nTraining interrupted by user")
             sys.exit(0)
         if args.lrs == "true": # nếu có dùng learning rate scheduler -> update lr according to the scheduling scheme
             scheduler.step(test_measure_mean)
         if prev_best_test == None or test_measure_mean > prev_best_test: # save current best
-            print(f"...Saving best weights to trained_weights/FCBFormer_{args.dataset}{file_cnt}.pt")
+            print(f"[INFO] Saving best weights to trained_weights/{args.name}{file_cnt}.pt")
             torch.save(
                 {
                     "epoch": epoch,
@@ -168,12 +175,12 @@ def train(args):
                     "test_measure_mean": test_measure_mean,
                     "test_measure_std": test_measure_std,
                 },
-                f"trained_weights/FCBFormer_{args.dataset}{file_cnt}.pt",
+                f"trained_weights/{args.name}{file_cnt}.pt",
             )
             prev_best_test = test_measure_mean
         
         # save last.pt
-        print(f"...Saving epoch {epoch}")
+        print(f"[INFO] Saving epoch {epoch} to trained_weights/last_{args.name}{file_cnt}.pt")
         torch.save(
                 {
                     "epoch": epoch,
@@ -182,21 +189,20 @@ def train(args):
                     "loss": loss,
                     "test_measure_mean": prev_best_test # current best, not this epoch's dice
                 },
-                f"trained_weights/last_{args.dataset}{file_cnt}.pt",
+                f"trained_weights/last_{args.name}{file_cnt}.pt",
             )
 
 
 def get_args():
     parser = argparse.ArgumentParser(description="Train FCBFormer on specified dataset")
-    parser.add_argument("--dataset", type=str, required=True)
-    parser.add_argument("--data-root", type=str, required=True, dest="root")
+    parser.add_argument("--name", type=str, required=True, help="Đặt tên cho file best_weight.pt")
+    parser.add_argument("--train-set", type=str, required=True, help="Đường dẫn tới thư mục tập train")
     parser.add_argument("--epochs", type=int, default=200)
     parser.add_argument("--batch-size", type=int, default=16)
-    parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr") # lr0: steps start out large, which makes quick progress and escape local minima
-    parser.add_argument("--learning-rate-scheduler", type=str, default="true", dest="lrs") # có dùng lr scheduler ko
+    parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr", help="lr0: steps start out large, which makes quick progress and escape local minima") 
+    parser.add_argument("--learning-rate-scheduler", type=str, default="true", dest="lrs", help="True nếu có dùng lr scheduler") 
     parser.add_argument("--learning-rate-scheduler-minimum", type=float, default=1e-6, dest="lrs_min")
     parser.add_argument("--multi-gpu", type=str, default="false", dest="mgpu", choices=["true", "false"])
-    parser.add_argument("--exist-ok", action='store_true', help='allow override trained_weights folder? default: false')
     parser.add_argument('--resume', type=str, help='resume most recent training from the specified path')
 
     return parser.parse_args()
@@ -204,8 +210,6 @@ def get_args():
 
 def main():
     args = get_args()
-    
-
     train(args)
 
 
