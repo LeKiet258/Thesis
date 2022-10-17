@@ -70,11 +70,6 @@ class Attention(nn.Module):
         if sr_ratio > 1: # tsao lại bỏ đi adaptive avg pooling
             self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio) # thực hiện spatial reduction
             self.norm = nn.LayerNorm(dim)
-        # else:
-        #     self.pool = nn.AdaptiveAvgPool2d(7) # tsao lại bỏ đi adaptive avg pooling
-        #     self.sr = nn.Conv2d(dim, dim, kernel_size=1, stride=1)
-        #     self.norm = nn.LayerNorm(dim)
-        #     self.act = nn.GELU()
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -96,20 +91,6 @@ class Attention(nn.Module):
         B, N, C = x.shape
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
-        # if not self.linear: # nếu ko mún dùng linear SRA
-        #     if self.sr_ratio > 1:
-        #         x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
-        #         x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
-        #         x_ = self.norm(x_)
-        #         kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        #     else:
-        #         kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-        # else: # nếu mún dùng linear SRA
-        #     x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
-        #     x_ = self.sr(self.pool(x_)).reshape(B, C, -1).permute(0, 2, 1)
-        #     x_ = self.norm(x_)
-        #     x_ = self.act(x_)
-        #     kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         if self.sr_ratio > 1:
             x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
             x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
