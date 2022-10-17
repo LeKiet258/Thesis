@@ -70,6 +70,7 @@ def eval(args):
         for file_name, d in top_lows.items(): # d: dice
             file_name = os.path.basename(file_name) 
             f.write(f"{file_name},{d}\n")
+    print(f"[INFO] Saving dice.csv to {args.pred_dir[:-2]}")
 
     # print worst predictions
     top_lows = {i:item for i, item in enumerate(dice)}
