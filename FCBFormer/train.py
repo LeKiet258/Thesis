@@ -71,9 +71,9 @@ def test(model, device, test_loader, epoch, perf_measure):
 def build(args):
     '''Prepare data (train + val), model, optimizer, loss, metric in under the form of functions'''
     device = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
-    img_path = args.train_set + "images/*"
+    img_path = args.train_set + "/images/*"
     input_paths = sorted(glob.glob(img_path))
-    depth_path = args.train_set + "masks/*"
+    depth_path = args.train_set + "/masks/*"
     target_paths = sorted(glob.glob(depth_path))
 
     train_dataloader, _, val_dataloader = dataloaders.get_dataloaders(
