@@ -180,8 +180,8 @@ def train(args):
             prev_best_test = test_measure_mean
         
         # remove prev epoch 
-        if epoch > 1:
-            os.remove(f"trained_weights/{args.name}-epoch_{epoch}.pt")
+        if os.path.exists(f"trained_weights/{args.name}-epoch_{epoch-1}.pt"):
+            os.remove(f"trained_weights/{args.name}-epoch_{epoch-1}.pt")
         # save last.pt
         print(f"[INFO] Saving epoch {epoch} to trained_weights/{args.name}-epoch_{epoch}.pt")
         torch.save(
