@@ -180,9 +180,10 @@ def train(args):
             prev_best_test = test_measure_mean
         
         # remove prev epoch 
-        if os.path.exists(f"trained_weights/{args.name}-epoch_{epoch-1}.pt"):
-            os.remove(f"trained_weights/{args.name}-epoch_{epoch-1}.pt")
+        # if os.path.exists(f"trained_weights/{args.name}-epoch_{epoch-1}.pt"):
+        #     os.remove(f"trained_weights/{args.name}-epoch_{epoch-1}.pt")
         # save last.pt
+        old_name = f"trained_weights/{args.name}-epoch_{epoch-1}.pt"
         print(f"[INFO] Saving epoch {epoch} to trained_weights/{args.name}-epoch_{epoch}.pt")
         torch.save(
                 {
@@ -192,8 +193,9 @@ def train(args):
                     "loss": loss,
                     "test_measure_mean": prev_best_test # current best, not this epoch's dice
                 },
-                f"trained_weights/{args.name}-epoch_{epoch}.pt",
+                old_name, # ghi đè
             )
+        os.rename(old_name, f"trained_weights/{args.name}-epoch_{epoch}.pt")
 
 
 def get_args():
