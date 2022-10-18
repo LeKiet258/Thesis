@@ -28,7 +28,7 @@ def split_ids(len_ids, is_train):
         n_train, n_val = len(train_indices), len(val_indices)
         print("[INFO] Train:val = {}:{} ảnh = {:.2f}%:{:.2f}%".format(
             n_train, n_val, 
-            n_train/(n_train+n_val), n_val/(n_train+n_val)
+            n_train/(n_train+n_val)*100, n_val/(n_train+n_val)*100
         ))
     else:
         test_indices = np.linspace(0, len_ids - 1, len_ids).astype(int)
