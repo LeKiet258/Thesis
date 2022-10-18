@@ -179,8 +179,11 @@ def train(args):
             )
             prev_best_test = test_measure_mean
         
+        # remove prev epoch 
+        if epoch > 1:
+            os.remove(f"trained_weights/{args.name}-epoch_{epoch}.pt")
         # save last.pt
-        print(f"[INFO] Saving epoch {epoch} to trained_weights/last_{args.name}{file_cnt}.pt")
+        print(f"[INFO] Saving epoch {epoch} to trained_weights/{args.name}-epoch_{epoch}.pt")
         torch.save(
                 {
                     "epoch": epoch,
@@ -189,7 +192,7 @@ def train(args):
                     "loss": loss,
                     "test_measure_mean": prev_best_test # current best, not this epoch's dice
                 },
-                f"trained_weights/last_{args.name}{file_cnt}.pt",
+                f"trained_weights/{args.name}-epoch_{epoch}.pt",
             )
 
 

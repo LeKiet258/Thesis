@@ -23,7 +23,13 @@ def split_ids(len_ids, is_train):
             test_size=valid_size,
             random_state=42,
         )
-        print(f"[INFO] Train:val = {len(train_indices)}:{len(val_indices)} ảnh = 90%:10%")
+
+        # for print
+        n_train, n_val = len(train_indices), len(val_indices)
+        print("[INFO] Train:val = {}:{} ảnh = {:.2f}%:{:.2f}%".format(
+            n_train, n_val, 
+            n_train/(n_train+n_val), n_val/(n_train+n_val)
+        ))
     else:
         test_indices = np.linspace(0, len_ids - 1, len_ids).astype(int)
         print(f"[INFO] Test trên {len(test_indices)} ảnh")
