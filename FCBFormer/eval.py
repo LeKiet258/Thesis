@@ -77,7 +77,7 @@ def eval(args):
     top_lows = dict(sorted(top_lows.items(), key=lambda item: item[1])) # sort dict based on vals
     top_lows_ix = list(top_lows.keys())[:args.top_low]
 
-    wc_dir = "./Worst cases/" + '/'.join(args.pred_dir.split('/')[-2:-1])
+    wc_dir = "./Worst cases/" + '/'.join(args.pred_dir.split('/')[-3:-1])
     print(f"[INFO] Saving {args.top_low} worst predictions to {wc_dir}")
 
     if not os.path.exists(wc_dir): # nếu chưa có thì tạo mới
