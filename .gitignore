@@ -1,11 +1,4 @@
-Predictions/
-Worst cases/
-data/
-explained_code/
-trained_weights/
-<<<<<<< HEAD
-=======
-__pycache__/
->>>>>>> sgelu
-FCBFormer.ipynb
-pvt_v2_b3.pth
+.gitattributes
+FCBFormer_mix.pt
+last_cim_no_head.pt
+last_mix.pt
