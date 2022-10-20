@@ -18,6 +18,7 @@ def eval(args):
     which_dataset = os.path.basename(args.test_set)
     if which_dataset not in args.pred_dir.split('/') [-2]:
         raise Exception("--test-set & --pred-dir do not refer to the same test dataset")
+    
     # determine path to prediction folder
     prediction_files = sorted(glob.glob(args.pred_dir))
     if not prediction_files:
@@ -27,8 +28,15 @@ def eval(args):
     depth_path = args.test_set + "/masks/*"
     target_paths = sorted(glob.glob(depth_path)) 
 
-    _, test_indices, _ = split_ids(len(target_paths), is_train=False)
+    test_indices = np.arange(len(target_paths))
     test_files = sorted([target_paths[test_indices[i]] for i in range(len(test_indices))]) # [img1.png, img2.png]
+    print(f"[INFO] Test trên {len(test_indices)} ảnh")
+
+    # checking
+    test_files_reduce = [os.path.basename(f) for f in test_files]
+    prediction_files_reduce = [os.path.basename(f) for f in prediction_files]
+    if test_files_reduce != prediction_files_reduce:
+        raise("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
 
     dice = []
     IoU = []
@@ -36,6 +44,8 @@ def eval(args):
     recall = []
 
     for i in range(len(test_files)):
+        if 'dice.csv' in prediction_files[i]:
+            continue
         pred = np.mean(cv2.imread(prediction_files[i]) / 255, axis=2) > 0.5 # shape: (352,352)
         pred = np.ndarray.flatten(pred) # shape: 123904 
         gt = (resize(cv2.imread(test_files[i]), (int(352), int(352)), anti_aliasing=False) > 0.5)
@@ -63,7 +73,6 @@ def eval(args):
         )
     
     # lưu tất cả dice theo thứ tự tăng dần vào csv
-    short_prediction_files = [os.path.basename(f) for f in prediction_files]
     top_lows = dict(zip(prediction_files, dice))
     top_lows = dict(sorted(top_lows.items(), key=lambda item: item[1]))
     with open(f'{args.pred_dir[:-2]}/dice.csv', 'w') as f:

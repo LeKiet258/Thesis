@@ -31,8 +31,9 @@ def build(args):
     target_paths = sorted(glob.glob(depth_path))
     # get test_dataloader
     _, test_dataloader, _ = dataloaders.get_dataloaders(input_paths, target_paths, batch_size=1, is_train=False)
-    _, test_indices, _ = dataloaders.split_ids(len(target_paths), is_train=False)
-    target_paths = [target_paths[test_indices[i]] for i in range(len(test_indices))]
+    test_indices = np.arange(len(target_paths))
+    target_paths = [target_paths[test_indices[i]] for i in range(len(test_indices))] # ['./data/ASU_polyp/masks/0.png', './data/ASU_polyp/masks/1.png', ...]
+
     perf = performance_metrics.DiceScore()
     model = models.FCBFormer()
 
