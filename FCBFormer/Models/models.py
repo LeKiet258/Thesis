@@ -107,7 +107,8 @@ class FCB(nn.Module):
 class ChannelAttention(nn.Module):
     def __init__(self, in_planes, ratio=16):
         super(ChannelAttention, self).__init__()
-        self.avg_pool = nn.AdaptiveAvgPool2d(1)
+        # squeeze spatial dim
+        self.avg_pool = nn.AdaptiveAvgPool2d(1) # Global AvgPool: đầu vào là 1 stack of 3 feature map, mỗi map 3x3 (input: 3x3x3) --GlobalAvgPool--> output là 1 stack of 3 scalar (3x1x1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
 
         self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False) 

@@ -90,13 +90,13 @@ def build(args):
         print(f"...Loading model, optimizer from {args.resume}")
         checkpoint = torch.load(args.resume, map_location="cpu")
         model.load_state_dict(checkpoint['model_state_dict'])
-        if args.mgpu:
+        if args.mgpu == "true":
             model = nn.DataParallel(model)
         model.to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     else:
-        if args.mgpu:
+        if args.mgpu == "true":
             model = nn.DataParallel(model)
         model.to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
@@ -169,7 +169,7 @@ def train(args):
             torch.save(
                 {
                     "epoch": epoch,
-                    "model_state_dict": model.state_dict() if args.mgpu else model.module.state_dict(),
+                    "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": loss,
                     "test_measure_mean": test_measure_mean,
@@ -188,7 +188,7 @@ def train(args):
         torch.save(
                 {
                     "epoch": epoch,
-                    "model_state_dict": model.state_dict() if args.mgpu else model.module.state_dict(),
+                    "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": loss,
                     "test_measure_mean": prev_best_test # current best, not this epoch's dice
@@ -207,7 +207,7 @@ def get_args():
     parser.add_argument("--learning-rate", type=float, default=1e-4, dest="lr", help="lr0: steps start out large, which makes quick progress and escape local minima") 
     parser.add_argument("--learning-rate-scheduler", type=str, default="true", dest="lrs", help="True nếu có dùng lr scheduler") 
     parser.add_argument("--learning-rate-scheduler-minimum", type=float, default=1e-6, dest="lrs_min")
-    parser.add_argument("--multi-gpu", action='store_true', dest="mgpu")
+    parser.add_argument("--multi-gpu", type=str, default="false", dest="mgpu", choices=["true", "false"])
     parser.add_argument('--resume', type=str, help='resume most recent training from the specified path')
 
     return parser.parse_args()

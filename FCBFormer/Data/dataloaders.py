@@ -31,7 +31,7 @@ def split_ids(len_ids, is_train):
             n_train/(n_train+n_val)*100, n_val/(n_train+n_val)*100
         ))
     else:
-        test_indices = np.arange(len(len_ids))
+        test_indices = np.arange(len_ids)
         print(f"[INFO] Test trên {len(test_indices)} ảnh")
 
     return train_indices, test_indices, val_indices # np arrays
