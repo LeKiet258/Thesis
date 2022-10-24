@@ -36,7 +36,7 @@ def eval(args):
     test_files_reduce = [os.path.basename(f) for f in test_files]
     prediction_files_reduce = [os.path.basename(f) for f in prediction_files]
     if test_files_reduce != prediction_files_reduce:
-        raise("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
+        raise Exception("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
 
     dice = []
     IoU = []
