@@ -226,7 +226,6 @@ class TB(nn.Module):
         # đi qua SFA 
         l_i = pyramid_emph[-1]
         for i in range(2, -1, -1): # sfa from top to bot
-            # chỉnh CIM trong này
             l = torch.cat((pyramid_emph[i], l_i), dim=1) # F_32, F_321, F_3210
             l = self.SFA[i](l)
             l_i = l

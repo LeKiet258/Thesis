@@ -223,6 +223,8 @@ class PyramidVisionTransformerImpr(nn.Module):
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
                  attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
                  depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], num_stages=4):
+        '''Param:
+        - embed_dim: lần lượt là chiều sâu của F1, F2, F3, F4'''
         super().__init__()
         self.num_classes = num_classes
         self.depths = depths
