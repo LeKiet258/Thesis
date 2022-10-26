@@ -179,9 +179,9 @@ class TB(nn.Module):
                 )
             )
 
-        # CIM
-        self.ca = ChannelAttention(64) # F1 theo hình lun có chiều sâu = 64
-        self.sa = SpatialAttention() # cần resize output để hợp concat với F_{4,3,2}
+        # CIM_order
+        self.sa = SpatialAttention()
+        self.ca = ChannelAttention(64)
 
         # SFA block
         self.SFA = nn.ModuleList([])
@@ -220,8 +220,8 @@ class TB(nn.Module):
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
         # hoặc chỉnh CIM (pyramid_emph[0]) ở đây
-        pyramid_emph[0] = self.ca(pyramid_emph[0]) * pyramid_emph[0] # channel attention, hadarmart product
         pyramid_emph[0] = self.sa(pyramid_emph[0]) * pyramid_emph[0] # spatial attention, hadarmart product
+        pyramid_emph[0] = self.ca(pyramid_emph[0]) * pyramid_emph[0] # channel attention, hadarmart product
 
         # đi qua SFA 
         l_i = pyramid_emph[-1]
