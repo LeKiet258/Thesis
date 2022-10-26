@@ -7,7 +7,6 @@ import glob
 
 import torch
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
 
 from Data import dataloaders
 from Models import models

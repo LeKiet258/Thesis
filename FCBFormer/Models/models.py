@@ -220,8 +220,7 @@ class TB(nn.Module):
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
         # hoặc chỉnh CIM (pyramid_emph[0]) ở đây
-        pyramid_emph[0] = self.ca(pyramid_emph[0]) * pyramid_emph[0] # channel attention, hadarmart product
-        pyramid_emph[0] = self.sa(pyramid_emph[0]) * pyramid_emph[0] # spatial attention, hadarmart product
+        pyramid_emph[0] = self.ca(pyramid_emph[0]) * self.sa(pyramid_emph[0]) # hadarmart product
 
         # đi qua SFA 
         l_i = pyramid_emph[-1]
