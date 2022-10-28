@@ -1,3 +1,4 @@
+import sched
 import sys
 import os
 import argparse
@@ -7,7 +8,7 @@ import glob
 
 import torch
 import torch.nn as nn
-from torch.utils.tensorboard import SummaryWriter
+# from torch.utils.tensorboard import SummaryWriter
 
 from Data import dataloaders
 from Models import models
@@ -155,6 +156,7 @@ def train(args):
         print(f"...Loading STT epoch, prev_best_test from {args.resume}")
         start_epoch = checkpoint['epoch'] + 1 
         prev_best_test = checkpoint['test_measure_mean']
+        scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
 
     for epoch in range(start_epoch, args.epochs + 1):
         try:
@@ -175,6 +177,7 @@ def train(args):
                     "loss": loss,
                     "test_measure_mean": test_measure_mean,
                     "test_measure_std": test_measure_std,
+                    "scheduler_state_dict": scheduler.state_dict()
                 },
                 f"trained_weights/{args.name}{file_cnt}.pt",
             )
@@ -192,7 +195,8 @@ def train(args):
                     "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": loss,
-                    "test_measure_mean": prev_best_test # current best, not this epoch's dice
+                    "test_measure_mean": prev_best_test, # current best, not this epoch's dice
+                    "scheduler_state_dict": scheduler.state_dict()
                 },
                 old_name, # ghi đè
             )

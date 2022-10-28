@@ -9,7 +9,7 @@ from timm.models.vision_transformer import _cfg
 
 
 class RB(nn.Module):
-    def __init__(self, in_channels, out_channels):
+    def __init__(self, in_channels, out_channels): 
         super().__init__()
 
         self.in_layers = nn.Sequential(
@@ -140,6 +140,69 @@ class SpatialAttention(nn.Module):
         x = self.conv1(x)
         return self.sigmoid(x)        
 
+class GCN(nn.Module):
+    def __init__(self, num_state, num_node, bias=False):
+        super(GCN, self).__init__()
+        self.conv1 = nn.Conv1d(num_node, num_node, kernel_size=1)
+        self.relu = nn.ReLU(inplace=True)
+        self.conv2 = nn.Conv1d(num_state, num_state, kernel_size=1, bias=bias)
+
+    def forward(self, x):
+        h = self.conv1(x.permute(0, 2, 1)).permute(0, 2, 1)
+        h = h - x
+        h = self.relu(self.conv2(h))
+        return h
+
+class SAM(nn.Module):
+    def __init__(self, num_in=64, plane_mid=16, mids=4, normalize=False):
+        super(SAM, self).__init__()
+
+        self.normalize = normalize
+        self.num_s = int(plane_mid)
+        self.num_n = (mids) * (mids)
+        self.priors = nn.AdaptiveAvgPool2d(output_size=(mids + 2, mids + 2))
+
+        self.conv_state = nn.Conv2d(num_in, self.num_s, kernel_size=1)
+        self.conv_proj = nn.Conv2d(num_in, self.num_s, kernel_size=1)
+        self.gcn = GCN(num_state=self.num_s, num_node=self.num_n)
+        self.conv_extend = nn.Conv2d(self.num_s, num_in, kernel_size=1, bias=False)
+
+    def forward(self, x, edge):
+        '''Params:
+        - x: T1, aka SFA, có shape = (88,88,64)
+        - edge (trong đồ thị): T2, aka CIM, có shape =  F1's shape = (88,88,64)
+        '''
+        import torch.nn.functional as F
+        # edge = F.upsample(edge, (x.size()[-2], x.size()[-1])) # upsample edge T2 thành kích thước (h,w) của T1, tức edge mới có shape (88,88,64)
+
+        n, c, h, w = x.size()
+        edge = torch.nn.functional.softmax(edge, dim=1)[:, 1, :, :].unsqueeze(1) # apply F(.) on T2 to produce T2' (88,88,1)
+
+        x_state_reshaped = self.conv_state(x).view(n, self.num_s, -1) # Q (n,16,h,w)
+        x_proj = self.conv_proj(x) # K (88,88,16)
+        x_mask = x_proj * edge # elem-wise(K,T2')
+
+        # AdaptivePool(V)
+        x_anchor = self.priors(x_mask)[:, :, 1:-1, 1:-1].reshape(n, self.num_s, -1)
+
+        x_proj_reshaped = torch.matmul(x_anchor.permute(0, 2, 1), x_proj.reshape(n, self.num_s, -1)) # matmul(K,V)
+        x_proj_reshaped = torch.nn.functional.softmax(x_proj_reshaped, dim=1) # f = softmax(matmul(K,V))
+
+        x_rproj_reshaped = x_proj_reshaped # f_copy = copy(f), do sau này có dùng lại f
+
+        x_n_state = torch.matmul(x_state_reshaped, x_proj_reshaped.permute(0, 2, 1)) # matmul(Q,f)
+        if self.normalize:
+            x_n_state = x_n_state * (1. / x_state_reshaped.size(2))
+        x_n_rel = self.gcn(x_n_state) # GCN(matmul(Q,f))
+
+        x_state_reshaped = torch.matmul(x_n_rel, x_rproj_reshaped) # Y' = f @ GCN(matmul(Q,f))
+        x_state = x_state_reshaped.view(n, self.num_s, *x.size()[2:]) # reshape thành (n,16,h,w)
+        out = x + (self.conv_extend(x_state)) # T1 + Wz(Y')
+        # print(f"SAM block, out.shape = {out.shape}") # expect: (h,w,c) = (88,88,64)
+
+        return out    
+
+
 class TB(nn.Module):
     def __init__(self):
 
@@ -170,7 +233,7 @@ class TB(nn.Module):
         for i in [1, 4, 7, 10]:
             self.backbone[i] = torch.nn.Sequential(*list(self.backbone[i].children()))
 
-        # LE block
+        # LE block: F1-4 khi qua LE đều cho output shape (88,88,64) = F1's shape
         self.LE = nn.ModuleList([])
         for i in range(4): # 4 cục LE
             self.LE.append(
@@ -181,21 +244,21 @@ class TB(nn.Module):
 
         # CIM
         self.ca = ChannelAttention(64) # F1 theo hình lun có chiều sâu = 64
-        self.sa = SpatialAttention() # cần resize output để hợp concat với F_{4,3,2}
+        self.sa = SpatialAttention() 
 
         # SFA block
         self.SFA = nn.ModuleList([])
         for i in range(3):
             self.SFA.append(nn.Sequential(RB(128, 64), RB(64, 64)))
 
+        # SAM
+        self.SAM = SAM()
+
     def get_pyramid(self, x):
         pyramid = []
         B = x.shape[0]
 
         for i, module in enumerate(self.backbone): # through 4 stage
-            # print(f"{i}{i}{i}{i}")
-            # print(f"shape: {x.shape}")
-            # print(f"module: {module}")
             if i in [0, 3, 6, 9]:
                 x, H, W = module(x)
             elif i in [1, 4, 7, 10]:
@@ -219,9 +282,9 @@ class TB(nn.Module):
         for i, level in enumerate(pyramid):
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
-        # hoặc chỉnh CIM (pyramid_emph[0]) ở đây
-        pyramid_emph[0] = self.ca(pyramid_emph[0]) * pyramid_emph[0] # channel attention, hadarmart product
-        pyramid_emph[0] = self.sa(pyramid_emph[0]) * pyramid_emph[0] # spatial attention, hadarmart product
+        # chỉnh CIM (pyramid_emph[0]) ở đây
+        emph_0 = self.ca(pyramid_emph[0]) * pyramid_emph[0] # channel attention, hadarmart product
+        cim_feature = self.sa(emph_0) * emph_0 # spatial attention, hadarmart product
 
         # đi qua SFA 
         l_i = pyramid_emph[-1]
@@ -230,7 +293,9 @@ class TB(nn.Module):
             l = self.SFA[i](l)
             l_i = l
 
-        return l
+        sam_feature = self.SAM(l, cim_feature) # SAM(SFA, CIM)
+
+        return sam_feature
 
 
 class FCBFormer(nn.Module):
