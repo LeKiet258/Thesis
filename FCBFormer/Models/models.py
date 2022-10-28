@@ -121,11 +121,13 @@ class TB(nn.Module):
         )
 
         checkpoint = torch.load("pvt_v2_b3.pth")
+        model_dict = backbone.state_dict()
+        state_dict = {k: v for k, v in checkpoint.items() if k in model_dict.keys()} # note: 
+        model_dict.update(state_dict)
+        
         backbone.default_cfg = _cfg()
-        backbone.load_state_dict(checkpoint)
-        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1]
-        # print(f"BACKBONE: {self.backbone}")
-        # intentional_err
+        backbone.load_state_dict(model_dict)
+        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1] # remove -1 là gì ?????????
 
         for i in [1, 4, 7, 10]:
             self.backbone[i] = torch.nn.Sequential(*list(self.backbone[i].children()))
@@ -194,4 +196,3 @@ class FCBFormer(nn.Module):
         out = self.PH(x)
 
         return out
-
