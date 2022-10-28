@@ -265,7 +265,7 @@ class TB(nn.Module):
                 for sub_module in module:
                     # print(f"sub_module: {sub_module}")
                     x = sub_module(x, H, W)
-            else:
+            else: # i in [2,5,8]
                 x = module(x)
                 x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
                 pyramid.append(x)
@@ -290,7 +290,7 @@ class TB(nn.Module):
         l_i = pyramid_emph[-1]
         for i in range(2, -1, -1): # sfa from top to bot
             l = torch.cat((pyramid_emph[i], l_i), dim=1) # F_32, F_321, F_3210
-            l = self.SFA[i](l)
+            l = self.SFA[i](l) # đi qua RB,RB
             l_i = l
 
         sam_feature = self.SAM(l, cim_feature) # SAM(SFA, CIM)
