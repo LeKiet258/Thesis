@@ -9,10 +9,10 @@ import cv2
 class SegDataset(data.Dataset):
     def __init__(
         self,
-        input_paths: list,
-        target_paths: list,
-        transform_input=None,
-        transform_target=None,
+        input_paths: list, # /images
+        target_paths: list, # /masks
+        transform_input=None, # Hàm thực hiện các biến đổi trên /images
+        transform_target=None, # Hàm thực hiện biến đổi trên /masks
         hflip=False,
         vflip=False,
         affine=False,
@@ -55,5 +55,4 @@ class SegDataset(data.Dataset):
             shear = random.uniform(-22.5, 22.5)
             x = TF.affine(x, angle, (h_trans, v_trans), scale, shear, fill=-1.0)
             y = TF.affine(y, angle, (h_trans, v_trans), scale, shear, fill=0.0)
-        return x.float(), y.float() # return float tensor (ép kiểu qua float64)
-
+        return x.float(), y.float() # return 2 float tensors: transformed image tensor & transformed mask tensor
