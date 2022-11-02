@@ -165,7 +165,7 @@ class TB(nn.Module):
         model_dict.update(state_dict)
         backbone.default_cfg = _cfg()
         backbone.load_state_dict(model_dict)
-        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1] # remove -1 là gì ?????????
+        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1] # freezing model: get layers before the last layer which is often the softmax layer
 
         for i in [1, 4, 7, 10]:
             self.backbone[i] = torch.nn.Sequential(*list(self.backbone[i].children()))
@@ -192,31 +192,26 @@ class TB(nn.Module):
         pyramid = []
         B = x.shape[0]
 
-        for i, module in enumerate(self.backbone): # through 4 stage
-            # print(f"{i}{i}{i}{i}")
-            # print(f"shape: {x.shape}")
-            # print(f"module: {module}")
-            if i in [0, 3, 6, 9]:
+        for i, module in enumerate(self.backbone): 
+            if i in [0, 3, 6, 9]: # execute OverlapPatchEmbed
                 x, H, W = module(x)
-            elif i in [1, 4, 7, 10]:
+            elif i in [1, 4, 7, 10]: # execute Transformer block (gồm Attention & MLP). 
                 for sub_module in module:
-                    # print(f"sub_module: {sub_module}")
                     x = sub_module(x, H, W)
-            else:
+            else: # 2,5,8: excute LayerNorm - F_{i-1} cần dc chuẩn hoá LayerNorm trước khi qua Transformer stage ith
                 x = module(x)
                 x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-                pyramid.append(x)
-        # i cuối là nhiu? 
-        # feature map x1->x4 đựng trong pyramid
+                pyramid.append(x) # lưu F1,F2,F3 (đã qua LayerNorm)
+        # i cuối là nhiu? --> 10
 
-        return pyramid
+        return pyramid # len=3
 
     def forward(self, x):
         pyramid = self.get_pyramid(x)
         pyramid_emph = [] # emph = emphasis
-        # đi qua PLD+: LE + SFA
+        
         # đi qua LE
-        for i, level in enumerate(pyramid):
+        for i, level in enumerate(pyramid): # 3
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
         # hoặc chỉnh CIM (pyramid_emph[0]) ở đây
