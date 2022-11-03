@@ -252,8 +252,8 @@ class PyramidVisionTransformerImpr(nn.Module):
             setattr(self, f"block{i + 1}", block)
             setattr(self, f"norm{i + 1}", norm)
 
-        # classification head (remove)
-        # self.head = nn.Linear(embed_dims[3], num_classes) if num_classes > 0 else nn.Identity()
+        # classification head 
+        self.head = nn.Linear(embed_dims[3], num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
 
@@ -304,7 +304,7 @@ class PyramidVisionTransformerImpr(nn.Module):
 
     def forward(self, x):
         x = self.forward_features(x)
-        # x = self.head(x)
+        x = self.head(x)
 
         return x
 

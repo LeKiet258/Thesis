@@ -198,13 +198,14 @@ class TB(nn.Module):
             elif i in [1, 4, 7, 10]: # execute Transformer block (gồm Attention & MLP). 
                 for sub_module in module:
                     x = sub_module(x, H, W)
-            else: # 2,5,8: excute LayerNorm - F_{i-1} cần dc chuẩn hoá LayerNorm trước khi qua Transformer stage ith
+            else: # 2,5,8,11: excute LayerNorm - F_{i-1} cần dc chuẩn hoá LayerNorm trước khi qua Transformer stage ith
                 x = module(x)
                 x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
                 pyramid.append(x) # lưu F1,F2,F3 (đã qua LayerNorm)
-        # i cuối là nhiu? --> 10
+        # i cuối là nhiu? --> 11
 
-        return pyramid # len=3
+        print(len(pyramid))
+        return pyramid # len=4
 
     def forward(self, x):
         pyramid = self.get_pyramid(x)
