@@ -149,16 +149,16 @@ def train(args):
             scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
                 optimizer, mode="max", factor=0.5, verbose=True
             )
-    print("[INFO] lr trước checkpoint:", optimizer.param_groups[0]['lr'])
-
+    
     start_epoch = 1
     prev_best_test = None
     if checkpoint is not None:
+        print("[INFO] lr trước checkpoint:", optimizer.param_groups[0]['lr'])
         print(f"...Loading STT epoch, prev_best_test from {args.resume}")
         start_epoch = checkpoint['epoch'] + 1 
         prev_best_test = checkpoint['test_measure_mean']
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-    print("[INFO] lr sau checkpoint:", optimizer.param_groups[0]['lr'])
+        print("[INFO] lr sau checkpoint:", optimizer.param_groups[0]['lr'])
 
     for epoch in range(start_epoch, args.epochs + 1):
         try:
