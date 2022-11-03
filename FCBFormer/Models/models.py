@@ -204,7 +204,7 @@ class TB(nn.Module):
                 pyramid.append(x) # lưu F1,F2,F3 (đã qua LayerNorm)
         # i cuối là nhiu? --> 11
 
-        print(len(pyramid))
+        # print(len(pyramid))
         return pyramid # len=4
 
     def forward(self, x):

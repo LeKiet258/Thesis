@@ -62,7 +62,7 @@ def predict(args):
     weight_name = os.path.basename(args.weight).split('.')[0]
     if not os.path.exists(f"./Predictions/Train on {weight_name}/Test on {test_set_name}"):
         os.makedirs(f"./Predictions/Train on {weight_name}/Test on {test_set_name}")
-    else: # nếu tồn tại đường dẫn trên thì ghi đè
+    else: # nếu tồn tại đường dẫn trên thì xoá đi tạo mới
         dir = f"./Predictions/Train on {weight_name}/Test on {test_set_name}"
         shutil.rmtree(dir) # remove
         os.makedirs(dir) # create new
