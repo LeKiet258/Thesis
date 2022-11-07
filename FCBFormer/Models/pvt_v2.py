@@ -11,7 +11,7 @@ from timm.models.vision_transformer import _cfg
 import math
 
 class Mlp(nn.Module):
-    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0.):
+    def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0., linear=False):
         super().__init__()
         out_features = out_features or in_features
         hidden_features = hidden_features or in_features
@@ -20,8 +20,10 @@ class Mlp(nn.Module):
         self.act = act_layer()
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
-
-        self.apply(self._init_weights) # mạng_MLP.init_weights()
+        self.linear = linear
+        if self.linear:
+            self.relu = nn.ReLU(inplace=True)
+        self.apply(self._init_weights)
 
     def _init_weights(self, m):
         if isinstance(m, nn.Linear):
@@ -40,6 +42,8 @@ class Mlp(nn.Module):
 
     def forward(self, x, H, W):
         x = self.fc1(x)
+        if self.linear:
+            x = self.relu(x)
         x = self.dwconv(x, H, W)
         x = self.act(x)
         x = self.drop(x)
@@ -47,11 +51,8 @@ class Mlp(nn.Module):
         x = self.drop(x)
         return x
 
-
 class Attention(nn.Module):
-    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1):
-        '''Param:
-        - linear <bool>: có dùng linear SRA hay ko. Nếu có thì khi tính sẽ áp dụng Avg Pooling, nếu ko thì ko áp dụng mà attention tính như PVTv1'''
+    def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, linear=False):
         super().__init__()
         assert dim % num_heads == 0, f"dim {dim} should be divided by num_heads {num_heads}."
 
@@ -66,10 +67,17 @@ class Attention(nn.Module):
         self.proj = nn.Linear(dim, dim)
         self.proj_drop = nn.Dropout(proj_drop)
 
+        self.linear = linear
         self.sr_ratio = sr_ratio
-        if sr_ratio > 1: # tsao lại bỏ đi adaptive avg pooling
-            self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio) # thực hiện spatial reduction
+        if not linear:
+            if sr_ratio > 1:
+                self.sr = nn.Conv2d(dim, dim, kernel_size=sr_ratio, stride=sr_ratio)
+                self.norm = nn.LayerNorm(dim)
+        else:
+            self.pool = nn.AdaptiveAvgPool2d(7)
+            self.sr = nn.Conv2d(dim, dim, kernel_size=1, stride=1)
             self.norm = nn.LayerNorm(dim)
+            self.act = nn.GELU()
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -91,13 +99,20 @@ class Attention(nn.Module):
         B, N, C = x.shape
         q = self.q(x).reshape(B, N, self.num_heads, C // self.num_heads).permute(0, 2, 1, 3)
 
-        if self.sr_ratio > 1:
-            x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
-            x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
-            x_ = self.norm(x_)
-            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        if not self.linear:
+            if self.sr_ratio > 1:
+                x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
+                x_ = self.sr(x_).reshape(B, C, -1).permute(0, 2, 1)
+                x_ = self.norm(x_)
+                kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            else:
+                kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         else:
-            kv = self.kv(x).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+            x_ = x.permute(0, 2, 1).reshape(B, C, H, W)
+            x_ = self.sr(self.pool(x_)).reshape(B, C, -1).permute(0, 2, 1)
+            x_ = self.norm(x_)
+            x_ = self.act(x_)
+            kv = self.kv(x_).reshape(B, -1, 2, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
         k, v = kv[0], kv[1]
 
         attn = (q @ k.transpose(-2, -1)) * self.scale
@@ -109,11 +124,11 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
 
         return x
-
+        
 # Transformer encoder block: Attention + MLP
 class Block(nn.Module):
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
-                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1):
+                 drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, linear=False):
         '''Param:
         - dim: Embedding dimension.
         - mlp_ratio:  Determines the hidden dimension size of the `MLP` module with respect to `dim`.
@@ -128,17 +143,16 @@ class Block(nn.Module):
         mlp : MLP module.'''
         
         super().__init__()
-        
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
             dim,
             num_heads=num_heads, qkv_bias=qkv_bias, qk_scale=qk_scale,
-            attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio)
+            attn_drop=attn_drop, proj_drop=drop, sr_ratio=sr_ratio, linear=linear)
         # NOTE: drop path for stochastic depth, we shall see if this is better than dropout here
         self.drop_path = DropPath(drop_path) if drop_path > 0. else nn.Identity()
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
-        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop)
+        self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop, linear=linear)
 
         self.apply(self._init_weights)
 
@@ -159,7 +173,7 @@ class Block(nn.Module):
 
     def forward(self, x, H, W):
         x = x + self.drop_path(self.attn(self.norm1(x), H, W)) # calc attention
-        x = x + self.drop_path(self.mlp(self.norm2(x), H, W)) # calc MLP
+        x = x + self.drop_path(self.mlp(self.norm2(x), H, W)) # calc mlp
         return x
 
 
@@ -179,16 +193,14 @@ class OverlapPatchEmbed(nn.Module):
         img_size = to_2tuple(img_size)
         patch_size = to_2tuple(patch_size)
         
-        # assert max(patch_size) > stride, "Set larger patch_size than stride"
+        assert max(patch_size) > stride, "Set larger patch_size than stride"
         
         self.img_size = img_size
         self.patch_size = patch_size
-        # self.H, self.W = img_size[0] // stride, img_size[1] // stride
-        self.H, self.W = img_size[0] // patch_size[0], img_size[1] // patch_size[1]
+        self.H, self.W = img_size[0] // stride, img_size[1] // stride
         self.num_patches = self.H * self.W
-        # mỗi 1 cặp patch, patch này lấn lên patch kia 7-3=4 px
         self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=stride,
-                              padding=(patch_size[0] // 2, patch_size[1] // 2)) 
+                              padding=(patch_size[0] // 2, patch_size[1] // 2))
         self.norm = nn.LayerNorm(embed_dim)
 
         self.apply(self._init_weights)
@@ -217,11 +229,11 @@ class OverlapPatchEmbed(nn.Module):
         return x, H, W
 
 
-class PyramidVisionTransformerImpr(nn.Module):
+class PyramidVisionTransformerV2(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=[64, 128, 256, 512],
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
                  attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
-                 depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], num_stages=4):
+                 depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], num_stages=4, linear=False):
         '''Param:
         - embed_dim: lần lượt là chiều sâu của F1, F2, F3, F4'''
         super().__init__()
@@ -242,7 +254,7 @@ class PyramidVisionTransformerImpr(nn.Module):
             block = nn.ModuleList([Block(
                 dim=embed_dims[i], num_heads=num_heads[i], mlp_ratio=mlp_ratios[i], qkv_bias=qkv_bias, qk_scale=qk_scale,
                 drop=drop_rate, attn_drop=attn_drop_rate, drop_path=dpr[cur + j], norm_layer=norm_layer,
-                sr_ratio=sr_ratios[i])
+                sr_ratio=sr_ratios[i], linear=linear)
                 for j in range(depths[i])])
             norm = norm_layer(embed_dims[i])
             cur += depths[i]
@@ -251,7 +263,7 @@ class PyramidVisionTransformerImpr(nn.Module):
             setattr(self, f"block{i + 1}", block)
             setattr(self, f"norm{i + 1}", norm)
 
-        # classification head 
+        # classification head
         self.head = nn.Linear(embed_dims[3], num_classes) if num_classes > 0 else nn.Identity()
 
         self.apply(self._init_weights)
@@ -288,7 +300,7 @@ class PyramidVisionTransformerImpr(nn.Module):
     def forward_features(self, x):
         B = x.shape[0]
 
-        for i in range(self.num_stages): # loop qua 4 stage để cho ra 4 feature map x1->x4
+        for i in range(self.num_stages):
             patch_embed = getattr(self, f"patch_embed{i + 1}")
             block = getattr(self, f"block{i + 1}")
             norm = getattr(self, f"norm{i + 1}")
@@ -334,53 +346,75 @@ def _conv_filter(state_dict, patch_size=16):
 
 
 @register_model
-class pvt_v2_b0(PyramidVisionTransformerImpr):
-    def __init__(self, **kwargs):
-        super(pvt_v2_b0, self).__init__(
-            patch_size=4, embed_dims=[32, 64, 160, 256], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-            qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1)
-
-
-@register_model
-class pvt_v2_b1(PyramidVisionTransformerImpr):
-    def __init__(self, **kwargs):
-        super(pvt_v2_b1, self).__init__(
-            patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-            qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1)
-
-@register_model
-class pvt_v2_b2(PyramidVisionTransformerImpr):
-    def __init__(self, **kwargs):
-        super(pvt_v2_b2, self).__init__(
-            patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-            qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1)
-
-@register_model
-def pvt_v2_b3(pretrained=False, **kwargs):
-    model = PyramidVisionTransformerImpr(
-        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-        qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1],
-        drop_rate=0.0, drop_path_rate=0.1)
+def pvt_v2_b0(pretrained=False, **kwargs):
+    model = PyramidVisionTransformerV2(
+        patch_size=4, embed_dims=[32, 64, 160, 256], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
+        **kwargs)
     model.default_cfg = _cfg()
 
     return model
 
+
 @register_model
-class pvt_v2_b4(PyramidVisionTransformerImpr):
-    def __init__(self, **kwargs):
-        super(pvt_v2_b4, self).__init__(
-            patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4],
-            qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1)
+def pvt_v2_b1(pretrained=False, **kwargs):
+    model = PyramidVisionTransformerV2(
+        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[2, 2, 2, 2], sr_ratios=[8, 4, 2, 1],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    return model
 
 
 @register_model
-class pvt_v2_b5(PyramidVisionTransformerImpr):
-    def __init__(self, **kwargs):
-        super(pvt_v2_b5, self).__init__(
-            patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4],
-            qkv_bias=True, norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 40, 3], sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1)
+def pvt_v2_b2(pretrained=False, **kwargs):
+    model = PyramidVisionTransformerV2(
+        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], **kwargs)
+    model.default_cfg = _cfg()
+
+    return model
+
+
+@register_model
+def pvt_v2_b3(pretrained=False, **kwargs):
+    model = PyramidVisionTransformerV2(
+        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 18, 3], sr_ratios=[8, 4, 2, 1],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    return model
+
+
+@register_model
+def pvt_v2_b4(pretrained=False, **kwargs):
+    model = PyramidVisionTransformerV2(
+        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 8, 27, 3], sr_ratios=[8, 4, 2, 1],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    return model
+
+
+@register_model
+def pvt_v2_b5(pretrained=False, **kwargs):
+    model = PyramidVisionTransformerV2(
+        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 6, 40, 3], sr_ratios=[8, 4, 2, 1],
+        **kwargs)
+    model.default_cfg = _cfg()
+
+    return model
+
+
+@register_model
+def pvt_v2_b2_li(pretrained=False, **kwargs):
+    model = PyramidVisionTransformerV2(
+        patch_size=4, embed_dims=[64, 128, 320, 512], num_heads=[1, 2, 5, 8], mlp_ratios=[8, 8, 4, 4], qkv_bias=True,
+        norm_layer=partial(nn.LayerNorm, eps=1e-6), depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], linear=True, **kwargs)
+    model.default_cfg = _cfg()
+
+    return model

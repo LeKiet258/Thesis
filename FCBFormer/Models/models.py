@@ -146,7 +146,7 @@ class TB(nn.Module):
         super().__init__()
 
         # backbone: sdụng pvt_v2_b3
-        backbone = pvt_v2.PyramidVisionTransformerImpr(
+        backbone = pvt_v2.PyramidVisionTransformerV2(
             patch_size=4,
             embed_dims=[64, 128, 320, 512],
             num_heads=[1, 2, 5, 8],
@@ -155,16 +155,12 @@ class TB(nn.Module):
             norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
             depths=[3, 4, 18, 3],
             sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1
+            drop_rate=0.0, drop_path_rate=0.0 # tweak between these 2
         )
 
         checkpoint = torch.load("pvt_v2_b3.pth")
-        model_dict = backbone.state_dict()
-        state_dict = {k: v for k, v in checkpoint.items() if k in model_dict.keys()} # note: class PVTV2Impr đã bỏ đi head
-        
-        model_dict.update(state_dict)
         backbone.default_cfg = _cfg()
-        backbone.load_state_dict(model_dict)
+        backbone.load_state_dict(checkpoint)
         self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1] # freezing model: get layers before the last layer which is often the softmax layer
 
         for i in [1, 4, 7, 10]:

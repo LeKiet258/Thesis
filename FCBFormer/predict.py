@@ -54,7 +54,7 @@ def check_generalisability(test_set):
         test_name = f"full {test_set.split('/')[-1]}"
     return test_name
 
-@torch.no_grad()
+@torch.no_grad() # decorator: predict thì ko cần đụng tới gradient
 def predict(args):
     device, test_dataloader, perf_measure, model, target_paths = build(args)
     test_set_name = check_generalisability(args.test_set) # full or not
