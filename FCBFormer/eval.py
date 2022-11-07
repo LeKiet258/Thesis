@@ -47,8 +47,8 @@ def eval(args):
     for i in range(len(test_files)):
         if 'dice.csv' in prediction_files[i]:
             continue
-        pred = np.mean(cv2.imread(prediction_files[i]) / 255, axis=2) > 0.5 # np.mean(.., axis=2): collapse ảnh từ 3 kênh thành 1 kênh -> đặt ngưỡng thres=0.5, trên ngưỡng này thì px là trắng, dưới ngưỡng này px là đen
-        pred = np.ndarray.flatten(pred) # duỗi mảng 2d thành 1d
+        pred = np.mean(cv2.imread(prediction_files[i]) / 255, axis=2) > 0.5 # shape: (352,352)
+        pred = np.ndarray.flatten(pred) # shape: 123904 
         gt = (resize(cv2.imread(test_files[i]), (int(352), int(352)), anti_aliasing=False) > 0.5)
 
         if len(gt.shape) == 3:
@@ -129,4 +129,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

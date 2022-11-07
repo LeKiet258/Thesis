@@ -56,4 +56,3 @@ class SegDataset(data.Dataset):
             x = TF.affine(x, angle, (h_trans, v_trans), scale, shear, fill=-1.0)
             y = TF.affine(y, angle, (h_trans, v_trans), scale, shear, fill=0.0)
         return x.float(), y.float() # return 2 float tensors: transformed image tensor & transformed mask tensor
-
