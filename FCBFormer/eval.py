@@ -16,7 +16,7 @@ import shutil
 def eval(args):
     # checking
     which_dataset = os.path.basename(args.test_set)
-    if which_dataset not in args.pred_dir.split('/') [-2]:
+    if which_dataset not in args.pred_dir.split('/')[-2]:
         raise Exception("--test-set & --pred-dir do not refer to the same test dataset")
     
     # determine path to prediction folder
@@ -35,8 +35,13 @@ def eval(args):
     # checking
     test_files_reduce = [os.path.basename(f) for f in test_files]
     prediction_files_reduce = [os.path.basename(f) for f in prediction_files]
+
+    if 'dice.csv' in prediction_files_reduce:
+        prediction_files_reduce.remove("dice.csv")
     if test_files_reduce != prediction_files_reduce:
-        raise("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
+        print(set(test_files_reduce).difference(set(prediction_files_reduce)))
+        print(set(prediction_files_reduce).difference(set(test_files_reduce)))
+        raise Exception("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
 
     dice = []
     IoU = []
@@ -128,4 +133,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -146,7 +146,7 @@ class TB(nn.Module):
         super().__init__()
 
         # backbone: sdụng pvt_v2_b3
-        backbone = pvt_v2.PyramidVisionTransformerImpr(
+        backbone = pvt_v2.PyramidVisionTransformerV2(
             patch_size=4,
             embed_dims=[64, 128, 320, 512],
             num_heads=[1, 2, 5, 8],
@@ -155,17 +155,13 @@ class TB(nn.Module):
             norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
             depths=[3, 4, 18, 3],
             sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.1
+            drop_rate=0.0, drop_path_rate=0.0 # tweak between these 2
         )
 
         checkpoint = torch.load("pvt_v2_b3.pth")
-        model_dict = backbone.state_dict()
-        state_dict = {k: v for k, v in checkpoint.items() if k in model_dict.keys()} # note: class PVTV2Impr đã bỏ đi head
-        
-        model_dict.update(state_dict)
         backbone.default_cfg = _cfg()
-        backbone.load_state_dict(model_dict)
-        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1] # remove -1 là gì ?????????
+        backbone.load_state_dict(checkpoint)
+        self.backbone = torch.nn.Sequential(*list(backbone.children()))[:-1] # freezing model: get layers before the last layer which is often the softmax layer
 
         for i in [1, 4, 7, 10]:
             self.backbone[i] = torch.nn.Sequential(*list(self.backbone[i].children()))
@@ -192,31 +188,27 @@ class TB(nn.Module):
         pyramid = []
         B = x.shape[0]
 
-        for i, module in enumerate(self.backbone): # through 4 stage
-            # print(f"{i}{i}{i}{i}")
-            # print(f"shape: {x.shape}")
-            # print(f"module: {module}")
-            if i in [0, 3, 6, 9]:
+        for i, module in enumerate(self.backbone): 
+            if i in [0, 3, 6, 9]: # execute OverlapPatchEmbed
                 x, H, W = module(x)
-            elif i in [1, 4, 7, 10]:
+            elif i in [1, 4, 7, 10]: # execute Transformer block (gồm Attention & MLP). 
                 for sub_module in module:
-                    # print(f"sub_module: {sub_module}")
                     x = sub_module(x, H, W)
-            else:
+            else: # 2,5,8,11: excute LayerNorm - F_{i-1} cần dc chuẩn hoá LayerNorm trước khi qua Transformer stage ith
                 x = module(x)
                 x = x.reshape(B, H, W, -1).permute(0, 3, 1, 2).contiguous()
-                pyramid.append(x)
-        # i cuối là nhiu? 
-        # feature map x1->x4 đựng trong pyramid
+                pyramid.append(x) # lưu F1,F2,F3,F4 (đã qua LayerNorm)
+        # i cuối là nhiu? --> 11
 
-        return pyramid
+        # print(len(pyramid))
+        return pyramid # len=4
 
     def forward(self, x):
         pyramid = self.get_pyramid(x)
         pyramid_emph = [] # emph = emphasis
-        # đi qua PLD+: LE + SFA
+        
         # đi qua LE
-        for i, level in enumerate(pyramid):
+        for i, level in enumerate(pyramid): # 4
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
         # hoặc chỉnh CIM (pyramid_emph[0]) ở đây
@@ -226,7 +218,6 @@ class TB(nn.Module):
         # đi qua SFA 
         l_i = pyramid_emph[-1]
         for i in range(2, -1, -1): # sfa from top to bot
-            # chỉnh CIM trong này
             l = torch.cat((pyramid_emph[i], l_i), dim=1) # F_32, F_321, F_3210
             l = self.SFA[i](l)
             l_i = l
@@ -255,4 +246,3 @@ class FCBFormer(nn.Module):
         out = self.PH(x)
 
         return out
-
