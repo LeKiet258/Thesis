@@ -155,7 +155,7 @@ class TB(nn.Module):
             norm_layer=partial(torch.nn.LayerNorm, eps=1e-6),
             depths=[3, 4, 18, 3],
             sr_ratios=[8, 4, 2, 1],
-            drop_rate=0.0, drop_path_rate=0.0 # tweak between these 2
+            drop_rate=0.0, drop_path_rate=0.1 # tweak between these 2
         )
 
         checkpoint = torch.load("pvt_v2_b3.pth")

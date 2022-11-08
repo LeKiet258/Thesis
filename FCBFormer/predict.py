@@ -100,9 +100,6 @@ def get_args():
     parser = argparse.ArgumentParser(description="Make predictions on specified dataset")
     parser.add_argument("--weight", type=str, required=True, help="đường dẫn tới best weight")
     parser.add_argument("--test-set", type=str, required=True, help="đường dẫn tới thư mục test_set. VD: data/Kvasir+CVC/TestDataset")
-    # parser.add_argument("--data-root", type=str, required=True, dest="root")
-    # parser.add_argument("--exist-ok", action='store_true', help='allow override prediction folder? default: create new folder')
-    # parser.add_argument("--generalisability", action='store_true', help="conduct generalisability test?")
     
     return parser.parse_args()
 
