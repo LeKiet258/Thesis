@@ -203,7 +203,9 @@ class TB(nn.Module):
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
         # cim_parallel
-        pyramid_emph[0] = self.ca(pyramid_emph[0]) * self.sa(pyramid_emph[0]) # hadarmart product
+        channel_branch = self.ca(pyramid_emph[0]) * pyramid_emph[0]
+        spatial_branch = self.sa(pyramid_emph[0]) * pyramid_emph[0]
+        pyramid_emph[0] = channel_branch + spatial_branch
 
         l_i = pyramid_emph[-1]
         for i in range(2, -1, -1):

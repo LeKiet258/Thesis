@@ -54,12 +54,12 @@ def check_generalisability(test_set):
         test_name = f"full {test_set.split('/')[-1]}"
     return test_name
 
-@torch.no_grad() # decorator: predict thì ko cần đụng tới gradient
+@torch.no_grad()
 def predict(args):
     device, test_dataloader, perf_measure, model, target_paths = build(args)
     test_set_name = check_generalisability(args.test_set) # full or not
 
-    weight_name = os.path.basename(args.weight).split('.')[0]
+    weight_name = os.path.basename(args.weight).split('.pt')[0]
     if not os.path.exists(f"./Predictions/Train on {weight_name}/Test on {test_set_name}"):
         os.makedirs(f"./Predictions/Train on {weight_name}/Test on {test_set_name}")
     else: # nếu tồn tại đường dẫn trên thì xoá đi tạo mới

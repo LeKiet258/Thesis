@@ -10,7 +10,6 @@ from timm.models.registry import register_model
 from timm.models.vision_transformer import _cfg
 import math
 
-
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0., linear=False):
         super().__init__()
@@ -51,7 +50,6 @@ class Mlp(nn.Module):
         x = self.fc2(x)
         x = self.drop(x)
         return x
-
 
 class Attention(nn.Module):
     def __init__(self, dim, num_heads=8, qkv_bias=False, qk_scale=None, attn_drop=0., proj_drop=0., sr_ratio=1, linear=False):
@@ -126,12 +124,24 @@ class Attention(nn.Module):
         x = self.proj_drop(x)
 
         return x
-
-
+        
+# Transformer encoder block: Attention + MLP
 class Block(nn.Module):
-
     def __init__(self, dim, num_heads, mlp_ratio=4., qkv_bias=False, qk_scale=None, drop=0., attn_drop=0.,
                  drop_path=0., act_layer=nn.GELU, norm_layer=nn.LayerNorm, sr_ratio=1, linear=False):
+        '''Param:
+        - dim: Embedding dimension.
+        - mlp_ratio:  Determines the hidden dimension size of the `MLP` module with respect to `dim`.
+        - qkv_bias <bool>: If True then we include bias to the query, key and value projections
+        - drop, attn_drop: Dropout probability
+        - drop_path: cũng là regularizer giống với dropout, nếu dropout dùng hạn chế overfitting bằng việc bỏ đi 1 vài neural, thì drop_path hạn chế overfitting bằng việc bỏ đi 1 vài parallel path
+        - linear <bool>: có muốn giảm complexity xún linear bằng cách áp linear SRA ko 
+        Attributes
+        ----------
+        norm1, norm2 : LayerNorm. Giống BatchNorm, nhưng khắc fục dc điểm yếu fải fụ thuộc vào mini-batch size của BatchNorm
+        attn : Attention module.
+        mlp : MLP module.'''
+        
         super().__init__()
         self.norm1 = norm_layer(dim)
         self.attn = Attention(
@@ -162,17 +172,22 @@ class Block(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x, H, W):
-        x = x + self.drop_path(self.attn(self.norm1(x), H, W))
-        x = x + self.drop_path(self.mlp(self.norm2(x), H, W))
-
+        x = x + self.drop_path(self.attn(self.norm1(x), H, W)) # calc attention
+        x = x + self.drop_path(self.mlp(self.norm2(x), H, W)) # calc mlp
         return x
 
 
 class OverlapPatchEmbed(nn.Module):
-    """ Image to Patch Embedding
-    """
+    """Image to Patch Embedding"""
 
     def __init__(self, img_size=224, patch_size=7, stride=4, in_chans=3, embed_dim=768):
+        '''
+        Param
+        - embed_dim: how big an embedding of a single patch is.
+        
+        Attributes
+        ----------
+        - proj: conv layer, note that it's not a normal convolution'''
         super().__init__()
         
         img_size = to_2tuple(img_size)
@@ -206,9 +221,9 @@ class OverlapPatchEmbed(nn.Module):
                 m.bias.data.zero_()
 
     def forward(self, x):
-        x = self.proj(x)
+        x = self.proj(x) # (batch_sz, 768, h_out, c_out): có batch_sz hình, mỗi hình có ra 768 feature maps, mỗi feature map có kích thước h_out*w_out
         _, _, H, W = x.shape
-        x = x.flatten(2).transpose(1, 2)
+        x = x.flatten(2).transpose(1, 2) # flatten từ chiều thứ 2 trở đi (tức flatten h_out*c_out), dc shape (batch_sz, 768, h_out*c_out), sau đó transpose (aka swap) chiều 1,2 lẫn nhau
         x = self.norm(x)
 
         return x, H, W
@@ -219,6 +234,8 @@ class PyramidVisionTransformerV2(nn.Module):
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
                  attn_drop_rate=0., drop_path_rate=0., norm_layer=nn.LayerNorm,
                  depths=[3, 4, 6, 3], sr_ratios=[8, 4, 2, 1], num_stages=4, linear=False):
+        '''Param:
+        - embed_dim: lần lượt là chiều sâu của F1, F2, F3, F4'''
         super().__init__()
         self.num_classes = num_classes
         self.depths = depths
