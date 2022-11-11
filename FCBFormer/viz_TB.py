@@ -73,7 +73,7 @@ def build(args):
     for i in range(len(tb.LE)):
         hooks.append(tb.LE[i].register_forward_hook(getActivation(f'F{i+1}_emph')))
     ## CIM
-    hooks.append(tb.sa.register_forward_hook(getActivation('ca'))) 
+    hooks.append(tb.ca.register_forward_hook(getActivation('ca'))) 
     hooks.append(tb.sa.register_forward_hook(getActivation('sa'))) 
     ## SFA
     for i in range(len(tb.SFA)):
@@ -93,15 +93,19 @@ def build(args):
         hook.remove()
     
 def viz_fm(args):
+    if not os.path.exists(f"./feature_maps"):
+        os.makedirs(f"./feature_maps")
+    else: # nếu tồn tại đường dẫn trên thì xoá đi tạo mới
+        dir = f"./feature_maps"
+        import shutil
+        shutil.rmtree(dir) # remove
+        os.makedirs(dir) # create new
     # 1 hình input -> f1: 64 fm, f2: 128 fm, f3: 320
 
     deps = [64,128,320,512]
     spats = [88,44,22,11]
     for i, (fm, weight) in enumerate(activation.items()):
         if fm == "sa" or fm == "ca": # CIM
-            weight = weight[0].permute(1,2,0) # 88,88,1
-            plt.imshow(weight, cmap='gray')
-            plt.savefig(f"./feature_maps/{fm}.png")
             continue
 
         weight = torch.squeeze(weight) # squeeze: remove axis "1"
@@ -118,11 +122,26 @@ def viz_fm(args):
             axes[j].axis("off")
         plt.savefig(f"./feature_maps/{fm}.png")
 
-    # viz CIM
-    # weight_sa = activation['sa']
-    # weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
-    # plt.imshow(weight_sa, cmap='gray')
-    # plt.savefig("./feature_maps/sa.png")
+    # viz sa
+    weight_sa = activation['sa']
+    weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
+    plt.imshow(weight_sa, cmap='gray')
+    plt.savefig(f"./feature_maps/sa.png")
+
+    # viz ca
+    weight_ca = activation['ca']
+    weight_ca = weight_ca[0].permute(1,2,0) # 1,1,64
+    print(f"weight_ca: {weight_ca}")
+    weight_F1_emp = torch.squeeze(activation['F1_emph']) 
+    weight_F1_emp = weight_F1_emp.reshape(88,88,64)
+    weight_ca_after = weight_ca * weight_F1_emp
+    fig, axes = plt.subplots(8,8, figsize=(30,30))
+    axes = axes.ravel()
+
+    for j in range(64):
+        axes[j].imshow(weight_ca_after[:, :, j], cmap='gray')
+        axes[j].axis("off")
+    plt.savefig(f"./feature_maps/ca_after.png")
 
 
 def get_args():
