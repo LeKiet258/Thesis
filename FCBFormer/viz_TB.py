@@ -73,6 +73,7 @@ def build(args):
     for i in range(len(tb.LE)):
         hooks.append(tb.LE[i].register_forward_hook(getActivation(f'F{i+1}_emph')))
     ## CIM
+    hooks.append(tb.sa.register_forward_hook(getActivation('ca'))) 
     hooks.append(tb.sa.register_forward_hook(getActivation('sa'))) 
     ## SFA
     for i in range(len(tb.SFA)):
@@ -80,6 +81,7 @@ def build(args):
 
     # ==============chạy forward pass==============
     for i, (img, target) in enumerate(test_dataloader):
+        img, target = img.to(device), target.to(device)
         output = tb(img)
     
     for k in activation:
@@ -93,11 +95,15 @@ def build(args):
 def viz_fm(args):
     # 1 hình input -> f1: 64 fm, f2: 128 fm, f3: 320
 
-    deps = [64,128,320]
-    spats = [88,44,22]
+    deps = [64,128,320,512]
+    spats = [88,44,22,11]
     for i, (fm, weight) in enumerate(activation.items()):
-        if fm == "sa":
+        if fm == "sa" or fm == "ca": # CIM
+            weight = weight[0].permute(1,2,0) # 88,88,1
+            plt.imshow(weight, cmap='gray')
+            plt.savefig(f"./feature_maps/{fm}.png")
             continue
+
         weight = torch.squeeze(weight) # squeeze: remove axis "1"
         if 'emph' in fm or 'sfa' in fm:
             weight = weight.permute(1,2,0)
@@ -110,13 +116,13 @@ def viz_fm(args):
         for j in range(64):
             axes[j].imshow(weight[:, :, j], cmap='gray')
             axes[j].axis("off")
-        plt.savefig(f"{fm}.png")
+        plt.savefig(f"./feature_maps/{fm}.png")
 
     # viz CIM
-    weight_sa = activation['sa']
-    weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
-    plt.imshow(weight_sa, cmap='gray')
-    plt.savefig("sa.png")
+    # weight_sa = activation['sa']
+    # weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
+    # plt.imshow(weight_sa, cmap='gray')
+    # plt.savefig("./feature_maps/sa.png")
 
 
 def get_args():
