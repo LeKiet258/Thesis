@@ -101,51 +101,32 @@ def build(args):
         hook.remove()
     
 def viz_fm(args):
-    if not os.path.exists(f"./feature_maps"):
-        os.makedirs(f"./feature_maps")
+    w = os.path.basename(args.weight).split(".pt")[0]
+    par = f"{w}_feature_maps"
+
+    if not os.path.exists(f"./{par}"):
+        os.makedirs(f"./{par}")
     else: # nếu tồn tại đường dẫn trên thì xoá đi tạo mới
-        dir = f"./feature_maps"
+        dir = f"./{par}"
         import shutil
         shutil.rmtree(dir) # remove
         os.makedirs(dir) # create new
     
-
     # viz ca 
     weight_ca = activation['ca'] # (1, 64, 1, 1)
-    print(weight_ca)
+    # print(weight_ca)
     mat = torch.squeeze(weight_ca).reshape(8,8)
     fig, ax = plt.subplots()
     ax.imshow(mat.cpu(), cmap="gray")
     ax.set_title("2d representation of 1d channel attention")
-    plt.savefig(f"./feature_maps/ca.png")
-    # viz ca+resid
-    # print(input_sa.shape)
-    # weight_ca_after = torch.squeeze(input_sa).reshape(88,88,64).detach().numpy() # 88, 88, 64
-    # weight_F1_emp = activation['F1_emph'] # 1, 64, 88, 88
-    # weight_ca_after = weight_ca * weight_F1_emp # 1, 64, 88, 88
-    # weight_ca_after = torch.squeeze(weight_ca_after).reshape(88,88,64) # 88, 88, 64
-    # fig, axes = plt.subplots(8,8, figsize=(30,30))
-    # axes = axes.ravel()
-    # for j in range(64):
-    #     axes[j].imshow(weight_ca_after[:, :, j], cmap='gray')
-    #     axes[j].axis("off")
-    # plt.savefig(f"./feature_maps/ca_w_resid.png")
+    plt.savefig(f"./{par}/ca.png")
 
     # viz sa
     weight_sa = activation['sa']
     fig, axes = plt.subplots()
     weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
     axes.imshow(weight_sa[:,:,0].cpu(), cmap='gray')
-    plt.savefig(f"./feature_maps/sa.png")
-    
-    # weight_sa_after = weight_sa * weight_ca_after
-    # weight_sa_after = torch.squeeze(output_cim).reshape(88,88,64).detach().numpy() # [1, 64, 88, 88]
-    # fig, axes = plt.subplots(8,8, figsize=(30,30))
-    # axes = axes.ravel()
-    # for j in range(64):
-    #     axes[j].imshow(weight_sa_after[:, :, j], cmap='gray')
-    #     axes[j].axis("off")
-    # plt.savefig(f"./feature_maps/sa_w_resid.png")
+    plt.savefig(f"./{par}/sa.png")
 
     deps = [64,128,320,512]
     spats = [88,44,22,11]
@@ -165,7 +146,7 @@ def viz_fm(args):
         for j in range(64):
             axes[j].imshow(weight[:, :, j].cpu(), cmap='gray')
             axes[j].axis("off")
-        plt.savefig(f"./feature_maps/{fm}.png")
+        plt.savefig(f"./{par}/{fm}.png")
 
 
 def get_args():
