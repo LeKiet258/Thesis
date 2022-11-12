@@ -20,7 +20,7 @@ def eval(args):
         raise Exception("--test-set & --pred-dir do not refer to the same test dataset")
     
     # determine path to prediction folder
-    prediction_files = sorted(glob.glob(args.pred_dir))
+    prediction_files = sorted(glob.glob(args.pred_dir)) 
     if not prediction_files:
         raise Exception("Prediction folder is empty")
 
@@ -55,11 +55,11 @@ def eval(args):
         pred = np.ndarray.flatten(pred) # shape: 123904 
         gt = (resize(cv2.imread(test_files[i]), (int(352), int(352)), anti_aliasing=False) > 0.5)
 
-        if len(gt.shape) == 3:
+        if len(gt.shape) == 3: #(h,w,1)
             gt = np.mean(gt, axis=2)
         gt = np.ndarray.flatten(gt)
 
-        dice.append(f1_score(gt, pred))
+        dice.append(f1_score(gt, pred)) # hard dice
         IoU.append(jaccard_score(gt, pred)) 
         precision.append(precision_score(gt, pred))
         recall.append(recall_score(gt, pred))

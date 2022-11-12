@@ -59,7 +59,7 @@ def predict(args):
     device, test_dataloader, perf_measure, model, target_paths = build(args)
     test_set_name = check_generalisability(args.test_set) # full or not
 
-    weight_name = os.path.basename(args.weight).split('.pt')[0]
+    weight_name = os.path.basename(args.weight).split('.pt')[0] # trained_weights/abc.pt
     if not os.path.exists(f"./Predictions/Train on {weight_name}/Test on {test_set_name}"):
         os.makedirs(f"./Predictions/Train on {weight_name}/Test on {test_set_name}")
     else: # nếu tồn tại đường dẫn trên thì xoá đi tạo mới
@@ -77,7 +77,7 @@ def predict(args):
         perf_accumulator.append(perf_measure(output, target).item())
         predicted_map = np.array(output.cpu())
         predicted_map = np.squeeze(predicted_map)
-        predicted_map = predicted_map > 0
+        predicted_map = predicted_map > 0 # mảng bool
         cv2.imwrite(
             "./Predictions/Train on {}/Test on {}/{}".format(
                 weight_name, test_set_name, os.path.basename(target_paths[i])

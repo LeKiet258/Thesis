@@ -12,23 +12,25 @@ import numpy as np
 import glob
 import os
 import matplotlib.pyplot as plt
+from pytorch_grad_cam.utils.image import show_cam_on_image, preprocess_image
 
 activation = {}
-input_sa = None
-output_cim = None
 def getActivation(name):
     # the hook signature
     def hook(model, input, output):
-        global input_sa, output_cim
-        if name == "sa":
-            input_sa = input[0]
-        if name == "sfa_0":
-            output_cim = input[0][:, :64, :,:]
         # print(f"input of {name}: {input[0].shape}")
         # print(f"output of {name}: {output.shape}")
         activation[name] = output.detach()
     return hook
 
+class SegmentationModelOutputWrapper(torch.nn.Module):
+    def __init__(self, model): 
+        super(SegmentationModelOutputWrapper, self).__init__()
+        self.model = model
+        
+    def forward(self, x):
+        return self.model(x)
+        
 def build(args):
     # ==============load ảnh test==============
     # chuẩn bị đường dẫn
@@ -72,6 +74,8 @@ def build(args):
     model.load_state_dict(state_dict["model_state_dict"]) # key là tên của layer và value là parameter (gồm weight và bias) của layer đó
     model.to(device)
     tb = model.TB
+    tb = SegmentationModelOutputWrapper(tb)
+    print(tb)
     
     # register forward hooks on the layers of choice
     hooks = []

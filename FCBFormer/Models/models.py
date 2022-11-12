@@ -123,6 +123,7 @@ class ChannelAttention(nn.Module):
         out = avg_out + max_out
         return self.sigmoid(out)
 
+'''Focus on where'''
 class SpatialAttention(nn.Module):
     def __init__(self, kernel_size=7):
         super(SpatialAttention, self).__init__()
@@ -139,6 +140,21 @@ class SpatialAttention(nn.Module):
         x = torch.cat([avg_out, max_out], dim=1)
         x = self.conv1(x)
         return self.sigmoid(x)        
+
+class CBAM(nn.Module):
+    def __init__(self):
+        super(CBAM, self).__init__()
+        self.ca = ChannelAttention(64) # F1 theo hình lun có chiều sâu = 64
+        self.ca_w_resid = torch.mul
+        self.sa = SpatialAttention()
+        self.sa_w_resid = torch.mul
+
+    def forward(self, x):
+        x_out = self.ca(x)
+        ca_w_resid = self.ca_w_resid(x_out, x)
+        x_out = self.sa(ca_w_resid)
+        sa_w_resid = self.sa_w_resid(x_out, ca_w_resid)
+        return sa_w_resid
 
 class TB(nn.Module):
     def __init__(self):
@@ -176,8 +192,7 @@ class TB(nn.Module):
             )
 
         # CIM
-        self.ca = ChannelAttention(64) # F1 theo hình lun có chiều sâu = 64
-        self.sa = SpatialAttention() # cần resize output để hợp concat với F_{4,3,2}
+        self.cbam = CBAM()
 
         # SFA block
         self.SFA = nn.ModuleList([])
@@ -212,8 +227,7 @@ class TB(nn.Module):
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
         # hoặc chỉnh CIM (pyramid_emph[0]) ở đây
-        pyramid_emph[0] = self.ca(pyramid_emph[0]) * pyramid_emph[0] # channel attention, hadarmart product
-        pyramid_emph[0] = self.sa(pyramid_emph[0]) * pyramid_emph[0] # spatial attention, hadarmart product
+        pyramid_emph[0] = self.cbam(pyramid_emph[0])
 
         # đi qua SFA 
         l_i = pyramid_emph[-1]
