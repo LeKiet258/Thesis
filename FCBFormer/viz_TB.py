@@ -14,16 +14,9 @@ import os
 import matplotlib.pyplot as plt
 
 activation = {}
-input_sa = None
-output_cim = None
 def getActivation(name):
     # the hook signature
     def hook(model, input, output):
-        global input_sa, output_cim
-        if name == "sa":
-            input_sa = input[0]
-        if name == "sfa_0":
-            output_cim = input[0][:, :64, :,:]
         # print(f"input of {name}: {input[0].shape}")
         # print(f"output of {name}: {output.shape}")
         activation[name] = output.detach()
@@ -72,6 +65,7 @@ def build(args):
     model.load_state_dict(state_dict["model_state_dict"]) # key là tên của layer và value là parameter (gồm weight và bias) của layer đó
     model.to(device)
     tb = model.TB
+    print(tb)
     
     # register forward hooks on the layers of choice
     hooks = []
@@ -82,8 +76,10 @@ def build(args):
     for i in range(len(tb.LE)):
         hooks.append(tb.LE[i].register_forward_hook(getActivation(f'F{i+1}_emph')))
     ## CIM
-    hooks.append(tb.ca.register_forward_hook(getActivation('ca'))) 
-    hooks.append(tb.sa.register_forward_hook(getActivation('sa'))) 
+    hooks.append(tb.cbam.ca.register_forward_hook(getActivation('ca'))) 
+    hooks.append(tb.cbam.ca_w_resid.register_forward_hook(getActivation('ca_w_resid'))) 
+    hooks.append(tb.cbam.sa.register_forward_hook(getActivation('sa'))) 
+    hooks.append(tb.cbam.sa_w_resid.register_forward_hook(getActivation('sa_w_resid'))) 
     ## SFA
     for i in range(len(tb.SFA)):
         hooks.append(tb.SFA[i].register_forward_hook(getActivation(f'sfa_{i}'))) # sfa_2,1,0 = 3 lần aggregate from top to bot
@@ -118,15 +114,11 @@ def viz_fm(args):
     ax.set_title("2d representation of 1d channel attention")
     plt.savefig(f"./feature_maps/ca.png")
     # viz ca+resid
-    # print(input_sa.shape)
-    weight_ca_after = torch.squeeze(input_sa).reshape(88,88,64).detach().numpy() # 88, 88, 64
-    # weight_F1_emp = activation['F1_emph'] # 1, 64, 88, 88
-    # weight_ca_after = weight_ca * weight_F1_emp # 1, 64, 88, 88
-    # weight_ca_after = torch.squeeze(weight_ca_after).reshape(88,88,64) # 88, 88, 64
+    ca_after = activation["ca_w_resid"][0].reshape(88,88,64)
     fig, axes = plt.subplots(8,8, figsize=(30,30))
     axes = axes.ravel()
     for j in range(64):
-        axes[j].imshow(weight_ca_after[:, :, j], cmap='gray')
+        axes[j].imshow(ca_after[:, :, j], cmap='gray')
         axes[j].axis("off")
     plt.savefig(f"./feature_maps/ca_w_resid.png")
 
@@ -136,13 +128,12 @@ def viz_fm(args):
     weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
     axes.imshow(weight_sa[:,:,0], cmap='gray')
     plt.savefig(f"./feature_maps/sa.png")
-    
-    # weight_sa_after = weight_sa * weight_ca_after
-    weight_sa_after = torch.squeeze(output_cim).reshape(88,88,64).detach().numpy() # [1, 64, 88, 88]
+    # viz sa+resid
+    sa_after = activation["sa_w_resid"][0].reshape(88,88,64)
     fig, axes = plt.subplots(8,8, figsize=(30,30))
     axes = axes.ravel()
     for j in range(64):
-        axes[j].imshow(weight_sa_after[:, :, j], cmap='gray')
+        axes[j].imshow(sa_after[:, :, j], cmap='gray')
         axes[j].axis("off")
     plt.savefig(f"./feature_maps/sa_w_resid.png")
 
