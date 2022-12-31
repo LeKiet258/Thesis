@@ -14,9 +14,13 @@ import os
 import matplotlib.pyplot as plt
 
 activation = {}
+input_ca = None
 def getActivation(name):
     # the hook signature
     def hook(model, input, output):
+        if name == "ca":
+            global input_ca 
+            input_ca = input[0]
         # print(f"input of {name}: {input[0].shape}")
         # print(f"output of {name}: {output.shape}")
         activation[name] = output.detach()
@@ -65,7 +69,8 @@ def build(args):
     model.load_state_dict(state_dict["model_state_dict"]) # key là tên của layer và value là parameter (gồm weight và bias) của layer đó
     model.to(device)
     tb = model.TB
-    print(tb)
+    # print(tb)
+    # shit
     
     # register forward hooks on the layers of choice
     hooks = []
@@ -74,12 +79,10 @@ def build(args):
         hooks.append(tb.backbone[ix].register_forward_hook(getActivation(f'F{i}')))
     ## LE block
     for i in range(len(tb.LE)):
-        hooks.append(tb.LE[i].register_forward_hook(getActivation(f'F{i+1}_emph')))
+        hooks.append(tb.LE[i].register_forward_hook(getActivation(f'F{i+1}_LE')))
     ## CIM
-    hooks.append(tb.cbam.ca.register_forward_hook(getActivation('ca'))) 
-    hooks.append(tb.cbam.ca_w_resid.register_forward_hook(getActivation('ca_w_resid'))) 
-    hooks.append(tb.cbam.sa.register_forward_hook(getActivation('sa'))) 
-    hooks.append(tb.cbam.sa_w_resid.register_forward_hook(getActivation('sa_w_resid'))) 
+    hooks.append(tb.ca.register_forward_hook(getActivation('ca'))) 
+    hooks.append(tb.sa.register_forward_hook(getActivation('sa'))) 
     ## SFA
     for i in range(len(tb.SFA)):
         hooks.append(tb.SFA[i].register_forward_hook(getActivation(f'sfa_{i}'))) # sfa_2,1,0 = 3 lần aggregate from top to bot
@@ -98,44 +101,32 @@ def build(args):
         hook.remove()
     
 def viz_fm(args):
-    if not os.path.exists(f"./feature_maps"):
-        os.makedirs(f"./feature_maps")
+    w = os.path.basename(args.weight).split(".pt")[0]
+    par = f"{w}_feature_maps"
+
+    if not os.path.exists(f"./{par}"):
+        os.makedirs(f"./{par}")
     else: # nếu tồn tại đường dẫn trên thì xoá đi tạo mới
-        dir = f"./feature_maps"
+        dir = f"./{par}"
         import shutil
         shutil.rmtree(dir) # remove
         os.makedirs(dir) # create new
     
     # viz ca 
     weight_ca = activation['ca'] # (1, 64, 1, 1)
+    # print(weight_ca)
     mat = torch.squeeze(weight_ca).reshape(8,8)
     fig, ax = plt.subplots()
-    ax.imshow(mat, cmap="gray")
+    ax.imshow(mat.cpu(), cmap="gray")
     ax.set_title("2d representation of 1d channel attention")
-    plt.savefig(f"./feature_maps/ca.png")
-    # viz ca+resid
-    ca_after = activation["ca_w_resid"][0].reshape(88,88,64)
-    fig, axes = plt.subplots(8,8, figsize=(30,30))
-    axes = axes.ravel()
-    for j in range(64):
-        axes[j].imshow(ca_after[:, :, j], cmap='gray')
-        axes[j].axis("off")
-    plt.savefig(f"./feature_maps/ca_w_resid.png")
+    plt.savefig(f"./{par}/ca.png")
 
     # viz sa
     weight_sa = activation['sa']
     fig, axes = plt.subplots()
     weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
-    axes.imshow(weight_sa[:,:,0], cmap='gray')
-    plt.savefig(f"./feature_maps/sa.png")
-    # viz sa+resid
-    sa_after = activation["sa_w_resid"][0].reshape(88,88,64)
-    fig, axes = plt.subplots(8,8, figsize=(30,30))
-    axes = axes.ravel()
-    for j in range(64):
-        axes[j].imshow(sa_after[:, :, j], cmap='gray')
-        axes[j].axis("off")
-    plt.savefig(f"./feature_maps/sa_w_resid.png")
+    axes.imshow(weight_sa[:,:,0].cpu(), cmap='gray')
+    plt.savefig(f"./{par}/sa.png")
 
     deps = [64,128,320,512]
     spats = [88,44,22,11]
@@ -144,7 +135,7 @@ def viz_fm(args):
             continue
 
         weight = torch.squeeze(weight) # squeeze: remove axis "1"
-        if 'emph' in fm or 'sfa' in fm:
+        if 'LE' in fm or 'sfa' in fm:
             weight = weight.permute(1,2,0)
         else:
             weight = weight.reshape(spats[i], spats[i], deps[i]) 
@@ -153,9 +144,9 @@ def viz_fm(args):
         axes = axes.ravel()
 
         for j in range(64):
-            axes[j].imshow(weight[:, :, j], cmap='gray')
+            axes[j].imshow(weight[:, :, j].cpu(), cmap='gray')
             axes[j].axis("off")
-        plt.savefig(f"./feature_maps/{fm}.png")
+        plt.savefig(f"./{par}/{fm}.png")
 
 
 def get_args():
