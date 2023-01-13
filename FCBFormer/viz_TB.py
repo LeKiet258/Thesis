@@ -18,11 +18,6 @@ input_ca = None
 def getActivation(name):
     # the hook signature
     def hook(model, input, output):
-        if name == "ca":
-            global input_ca 
-            input_ca = input[0]
-        # print(f"input of {name}: {input[0].shape}")
-        # print(f"output of {name}: {output.shape}")
         activation[name] = output.detach()
     return hook
 
@@ -102,7 +97,11 @@ def build(args):
     
 def viz_fm(args):
     w = os.path.basename(args.weight).split(".pt")[0]
-    par = f"{w}_feature_maps"
+
+    # create folder containing fmap
+    if not os.path.exists("feature_maps"):
+        os.mkdir("feature_maps")
+    par = f"feature_maps/{w}_feature_maps"
 
     if not os.path.exists(f"./{par}"):
         os.makedirs(f"./{par}")
@@ -130,9 +129,14 @@ def viz_fm(args):
 
     deps = [64,128,320,512]
     spats = [88,44,22,11]
+    weight_f1_le = None
     for i, (fm, weight) in enumerate(activation.items()):
         if fm == "sa" or fm == "ca": # CIM
             continue
+
+        if fm == "F1_LE":
+            weight_f1_le = weight
+            # np.savetxt('F1_LE.csv', weight.cpu().reshape(-1))
 
         weight = torch.squeeze(weight) # squeeze: remove axis "1"
         if 'LE' in fm or 'sfa' in fm:
@@ -147,6 +151,28 @@ def viz_fm(args):
             axes[j].imshow(weight[:, :, j].cpu(), cmap='gray')
             axes[j].axis("off")
         plt.savefig(f"./{par}/{fm}.png")
+
+    # save elem-wise result of cim
+    weighted_fmap = weight_ca * weight_f1_le # (1, 64, 88, 88)
+    weight = torch.squeeze(weighted_fmap) # squeeze: remove axis "1"
+    weight = weight.permute(1,2,0)
+    fig, axes = plt.subplots(8,8, figsize=(30,30))
+    axes = axes.ravel()
+    for j in range(64):
+        axes[j].imshow(weight[:, :, j].cpu(), cmap='gray')
+        axes[j].axis("off")
+    plt.savefig(f"./{par}/weighted_fmap.png")
+
+    # save the final result of cim (sa's output * sa's input)
+    cim_res = weighted_fmap * activation['sa'] # (1, 64, 88, 88)
+    weight = torch.squeeze(cim_res) # squeeze: remove axis "1"
+    weight = weight.permute(1,2,0)
+    _, axes = plt.subplots(8,8, figsize=(30,30))
+    axes = axes.ravel()
+    for j in range(64):
+        axes[j].imshow(weight[:, :, j].cpu(), cmap='gray')
+        axes[j].axis("off")
+    plt.savefig(f"./{par}/cim_output.png")
 
 
 def get_args():

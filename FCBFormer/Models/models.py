@@ -111,9 +111,9 @@ class ChannelAttention(nn.Module):
         self.avg_pool = nn.AdaptiveAvgPool2d(1) # Global AvgPool: đầu vào là 1 stack of 3 feature map, mỗi map 3x3 (input: 3x3x3) --GlobalAvgPool--> output là 1 stack of 3 scalar (3x1x1)
         self.max_pool = nn.AdaptiveMaxPool2d(1)
 
-        self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False) 
+        self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False) # in=C=64, out=C//16=4, 1 kernel
         self.relu1 = nn.ReLU() 
-        self.fc2   = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
+        self.fc2   = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False) # in=4, out=64, kernel=1
 
         self.sigmoid = nn.Sigmoid()
 
