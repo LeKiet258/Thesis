@@ -103,42 +103,6 @@ class FCB(nn.Module):
             h = module(cat_in)
         return h
 
-'''Focus on 'what' '''
-class ChannelAttention(nn.Module):
-    def __init__(self, in_planes, ratio=16):
-        super(ChannelAttention, self).__init__()
-        # squeeze spatial dim
-        self.avg_pool = nn.AdaptiveAvgPool2d(1) # Global AvgPool: đầu vào là 1 stack of 3 feature map, mỗi map 3x3 (input: 3x3x3) --GlobalAvgPool--> output là 1 stack of 3 scalar (3x1x1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-
-        self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False) 
-        self.relu1 = nn.ReLU() 
-        self.fc2   = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False)
-
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = self.fc2(self.relu1(self.fc1(self.avg_pool(x))))
-        max_out = self.fc2(self.relu1(self.fc1(self.max_pool(x))))
-        out = avg_out + max_out
-        return self.sigmoid(out)
-
-class SpatialAttention(nn.Module):
-    def __init__(self, kernel_size=7):
-        super(SpatialAttention, self).__init__()
-
-        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
-        padding = 3 if kernel_size == 7 else 1
-
-        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True) # collapse the channel to 1 -> shape: (H,W,1)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = self.conv1(x)
-        return self.sigmoid(x)  
 
 class TB(nn.Module):
     def __init__(self):
@@ -172,10 +136,6 @@ class TB(nn.Module):
                 )
             )
 
-        # CIM
-        self.ca = ChannelAttention(64) # F1 theo hình lun có chiều sâu = 64
-        self.sa = SpatialAttention()
-
         self.SFA = nn.ModuleList([])
         for i in range(3):
             self.SFA.append(nn.Sequential(RB(128, 64), RB(64, 64)))
@@ -202,11 +162,6 @@ class TB(nn.Module):
         for i, level in enumerate(pyramid):
             pyramid_emph.append(self.LE[i](pyramid[i]))
 
-        # cim_parallel
-        channel_branch = self.ca(pyramid_emph[0]) * pyramid_emph[0]
-        spatial_branch = self.sa(pyramid_emph[0]) * pyramid_emph[0]
-        pyramid_emph[0] = channel_branch + spatial_branch
-
         l_i = pyramid_emph[-1]
         for i in range(2, -1, -1):
             l = torch.cat((pyramid_emph[i], l_i), dim=1)
@@ -214,6 +169,7 @@ class TB(nn.Module):
             l_i = l
 
         return l
+
 
 class FCBFormer(nn.Module):
     def __init__(self, size=352):
