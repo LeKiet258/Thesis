@@ -117,14 +117,17 @@ def viz_fm(args):
     mat = torch.squeeze(weight_ca).reshape(8,8)
     fig, ax = plt.subplots()
     ax.imshow(mat.cpu(), cmap="gray")
+    ax.axis("off")
     ax.set_title("2d representation of 1d channel attention")
     plt.savefig(f"./{par}/ca.png")
 
     # viz sa
     weight_sa = activation['sa']
-    fig, axes = plt.subplots()
+    fig, ax = plt.subplots()
     weight_sa = weight_sa[0].permute(1,2,0) # 88,88,1
-    axes.imshow(weight_sa[:,:,0].cpu(), cmap='gray')
+    ax.imshow(weight_sa[:,:,0].cpu(), cmap='gray')
+    ax.axis("off")
+    ax.set_title("Spatial Attention Map")
     plt.savefig(f"./{par}/sa.png")
 
     deps = [64,128,320,512]
