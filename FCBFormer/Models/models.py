@@ -3,8 +3,9 @@ import numpy as np
 
 import torch
 from torch import nn
+from torchvision import transforms
 
-from Models import pvt_v2
+import pvt_v2
 from timm.models.vision_transformer import _cfg
 
 
@@ -103,43 +104,34 @@ class FCB(nn.Module):
             h = module(cat_in)
         return h
 
-'''Focus on 'what' '''
-class ChannelAttention(nn.Module):
-    def __init__(self, in_planes, ratio=16):
-        super(ChannelAttention, self).__init__()
-        # squeeze spatial dim
-        self.avg_pool = nn.AdaptiveAvgPool2d(1) # Global AvgPool: đầu vào là 1 stack of 3 feature map, mỗi map 3x3 (input: 3x3x3) --GlobalAvgPool--> output là 1 stack of 3 scalar (3x1x1)
-        self.max_pool = nn.AdaptiveMaxPool2d(1)
-
-        self.fc1   = nn.Conv2d(in_planes, in_planes // ratio, 1, bias=False) # in=C=64, out=C//16=4, 1 kernel
-        self.relu1 = nn.ReLU() 
-        self.fc2   = nn.Conv2d(in_planes // ratio, in_planes, 1, bias=False) # in=4, out=64, kernel=1
-
-        self.sigmoid = nn.Sigmoid()
-
+class PPM(nn.ModuleList):
+    def __init__(self, in_channels, channels, pool_scales=[1,2,3,6]):
+        super(PPM, self).__init__()
+        for i, pool_scale in enumerate(pool_scales, 1):
+            pyramid_pool = nn.Sequential(
+                    nn.AdaptiveAvgPool2d(pool_scale),
+                    nn.Conv2d(in_channels, channels, kernel_size=1, padding=1),
+                    nn.ReLU()
+                )
+            setattr(self, f"pyramid_pool{i}", pyramid_pool)
+        self.conv = nn.Conv2d(in_channels + channels*4, 64, kernel_size=3, padding=1)
+        self.upsample = nn.Upsample(size=88)
+        self.act = nn.PReLU()
+    
     def forward(self, x):
-        avg_out = self.fc2(self.relu1(self.fc1(self.avg_pool(x))))
-        max_out = self.fc2(self.relu1(self.fc1(self.max_pool(x))))
-        out = avg_out + max_out
-        return self.sigmoid(out)
+        ppm_outs = []
+        N, C, H, W = x.size()
+        resize_op = transforms.Resize((H, W), antialias=True)
+        
+        for i in range(1,5):
+            pyramid_pool = getattr(self, f"pyramid_pool{i}")
+            ppm_out = pyramid_pool(x)
+            ppm_out = resize_op(ppm_out)
+            ppm_outs.append(ppm_out)
+        out = torch.cat(ppm_outs + [x], dim=1)
+        out = self.act(self.conv(out))
+        return self.upsample(out)
 
-'''Focus on where'''
-class SpatialAttention(nn.Module):
-    def __init__(self, kernel_size=7):
-        super(SpatialAttention, self).__init__()
-
-        assert kernel_size in (3, 7), 'kernel size must be 3 or 7'
-        padding = 3 if kernel_size == 7 else 1
-
-        self.conv1 = nn.Conv2d(2, 1, kernel_size, padding=padding, bias=False)
-        self.sigmoid = nn.Sigmoid()
-
-    def forward(self, x):
-        avg_out = torch.mean(x, dim=1, keepdim=True)
-        max_out, _ = torch.max(x, dim=1, keepdim=True)
-        x = torch.cat([avg_out, max_out], dim=1)
-        x = self.conv1(x)
-        return self.sigmoid(x)        
 
 class TB(nn.Module):
     def __init__(self):
@@ -176,14 +168,12 @@ class TB(nn.Module):
                 )
             )
 
-        # CIM
-        self.ca = ChannelAttention(64)
-        self.sa = SpatialAttention()
-
         # SFA block
         self.SFA = nn.ModuleList([])
-        for i in range(3):
+        for i in range(4):
             self.SFA.append(nn.Sequential(RB(128, 64), RB(64, 64)))
+            
+        self.PPM = PPM(512, 16)
 
     def get_pyramid(self, x):
         pyramid = []
@@ -209,16 +199,15 @@ class TB(nn.Module):
         pyramid_emph = [] # emph = emphasis
         
         # đi qua LE
-        for i, level in enumerate(pyramid): # 3
+        for i, level in enumerate(pyramid): # 4
             pyramid_emph.append(self.LE[i](pyramid[i]))
-
-        # hoặc chỉnh CIM (pyramid_emph[0]) ở đây
-        pyramid_emph[0] = self.ca(pyramid_emph[0]) * pyramid_emph[0]
-        pyramid_emph[0] = self.sa(pyramid_emph[0]) * pyramid_emph[0]
-
+        
+        # PPM
+        pyramid_emph.append(self.PPM(pyramid[-1]))
+        
         # đi qua SFA 
         l_i = pyramid_emph[-1]
-        for i in range(2, -1, -1): # sfa from top to bot
+        for i in range(3, -1, -1): # sfa from top to bot
             l = torch.cat((pyramid_emph[i], l_i), dim=1) # F_32, F_321, F_3210
             l = self.SFA[i](l)
             l_i = l
@@ -247,3 +236,14 @@ class FCBFormer(nn.Module):
         out = self.PH(x)
 
         return out
+
+if __name__ == '__main__':
+    ppm_module = PPM(512, 16)
+    x = torch.rand(1, 512, 11, 11)
+    x = ppm_module(x)
+    print(x.shape)
+    
+    # tb = TB()
+    # x = torch.rand(1, 3, 352, 352)
+    # out = tb(x)
+    # print(x.shape)
