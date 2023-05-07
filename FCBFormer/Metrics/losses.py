@@ -25,19 +25,19 @@ class SoftDiceLoss(nn.Module):
         extra = sorted_tn[:, :M]
         
         # FDLv2
-        # B = torch.cat((fp, extra), dim=1) # (B, 352^2 + extra)
-        # score = (
-        #     (intersection.sum(1) + self.smooth)
-        #     / torch.pow(B, 2.).sum(1) + torch.pow(m2, 2.).sum(1) + self.smooth)
-        # )
+        B = torch.cat((fp, extra), dim=1) # (B, 352^2 + extra)
+        score = (
+            (intersection.sum(1) + self.smooth)
+            / (torch.pow(B, 2.).sum(1) + torch.pow(m2, 2.).sum(1) + self.smooth)
+        )
         
         # FDLv1
-        fn = m2 * (1 - m1)
-        AB = torch.cat((intersection, fn, fp, extra), dim=1) # (B, 352^2 + ...), 0 included
-        score = (
-            2 * (intersection.sum(1) + self.smooth)
-            / (torch.pow(AB, 2.).sum(1) + torch.pow(m2, 2.).sum(1) + self.smooth)
-        )
+        # fn = m2 * (1 - m1)
+        # AB = torch.cat((intersection, fn, fp, extra), dim=1) # (B, 352^2 + ...), 0 included
+        # score = (
+        #     2 * (intersection.sum(1) + self.smooth)
+        #     / (torch.pow(AB, 2.).sum(1) + torch.pow(m2, 2.).sum(1) + self.smooth)
+        # )
         
         score = 1 - score.sum() / num
         return score
