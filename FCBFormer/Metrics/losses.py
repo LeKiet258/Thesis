@@ -8,7 +8,6 @@ class SoftDiceLoss(nn.Module):
         self.smooth = smooth
 
     def forward(self, logits, targets):
-        print(targets)
         num = targets.size(0) # batch size
 
         probs = torch.sigmoid(logits)
@@ -29,7 +28,7 @@ class SoftDiceLoss(nn.Module):
         # B = torch.cat((fp, extra), dim=1) # (B, 352^2 + extra)
         # score = (
         #     (intersection.sum(1) + self.smooth)
-        #     / B.sum(1) + m2.sum(1) + self.smooth)
+        #     / torch.pow(B, 2.).sum(1) + torch.pow(m2, 2.).sum(1) + self.smooth)
         # )
         
         # FDLv1
@@ -37,7 +36,7 @@ class SoftDiceLoss(nn.Module):
         AB = torch.cat((intersection, fn, fp, extra), dim=1) # (B, 352^2 + ...), 0 included
         score = (
             2 * (intersection.sum(1) + self.smooth)
-            / (AB.sum(1) + m2.sum(1) + self.smooth)
+            / (torch.pow(AB, 2.).sum(1) + torch.pow(m2, 2.).sum(1) + self.smooth)
         )
         
         score = 1 - score.sum() / num
