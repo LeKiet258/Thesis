@@ -17,20 +17,17 @@ from Metrics import losses
 import re
 
 def train_epoch(model, device, train_loader, optimizer, epoch, Dice_loss, BCE_loss):
-    '''Train for 1 epoch, return the batch mean loss'''
     t = time.time()
     model.train()
     loss_accumulator = []
-
-    # instructions: https://pytorch.org/tutorials/beginner/introyt/trainingyt.html#the-training-loop 
     for batch_idx, (data, target) in enumerate(train_loader):
         data, target = data.to(device), target.to(device)
-        optimizer.zero_grad() # clears x.grad for every parameter x in the optimizer; otherwise you’ll accumulate the gradients from multiple passes
-        output = model(data) # forward pass: model.forward(data)
-        loss = Dice_loss(output, target) + BCE_loss(torch.sigmoid(output), target) # calc batch loss
-        loss.backward() # computes gradients (x.grad += dloss/dx) for every x that has requires_grad=True
-        optimizer.step() # updates the value of x using the gradient x.grad (ex: x += -lr * x.grad)
-        loss_accumulator.append(loss.item()) # item() method extracts the loss’s value as a Python floa
+        optimizer.zero_grad()
+        output = model(data)
+        loss = Dice_loss(output, target) + BCE_loss(torch.sigmoid(output), target)
+        loss.backward()
+        optimizer.step()
+        loss_accumulator.append(loss.item())
 
         print(
             "\rTrain Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}\tTime: {:.6f}".format(
@@ -48,34 +45,29 @@ def train_epoch(model, device, train_loader, optimizer, epoch, Dice_loss, BCE_lo
 
 
 @torch.no_grad()
-def test(model, device, test_loader, epoch, Dice_loss, BCE_loss, perf_measure):
-    '''calc val_loss for 1 epoch'''
+def test(model, device, test_loader, epoch, perf_measure):
     t = time.time()
     model.eval()
-    loss_accumulator = []
     perf_accumulator = []
 
     for batch_idx, (data, target) in enumerate(test_loader):
         data, target = data.to(device), target.to(device)
         output = model(data)
-        loss = Dice_loss(output, target) + BCE_loss(torch.sigmoid(output), target) # calc batch loss
-        loss_accumulator.append(loss.item())
         perf_accumulator.append(perf_measure(output, target).item())
         
         print(
-            "\rTest  Epoch: {} [{}/{} ({:.1f}%)]\tLoss: {:.6f}\tPerformance: {:.6f}\tTime: {:.6f}".format(
+            "\rTest  Epoch: {} [{}/{} ({:.1f}%)]\tAverage performance: {:.6f}\tTime: {:.6f}".format(
                 epoch,
                 batch_idx + 1,
                 len(test_loader),
                 100.0 * (batch_idx + 1) / len(test_loader),
-                np.mean(loss_accumulator), # **
-                np.mean(perf_accumulator), # **
+                np.mean(perf_accumulator),
                 time.time() - t,
             ),
             end = "" if batch_idx + 1 < len(test_loader) else "\n",
         )
 
-    return np.mean(loss_accumulator), np.mean(perf_accumulator)
+    return np.mean(perf_accumulator), np.std(perf_accumulator)
 
 
 def build(args):
@@ -104,7 +96,6 @@ def build(args):
             model = nn.DataParallel(model)
         model.to(device)
         optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr)
-        print("[INFO] lr before checkpoint:", optimizer.param_groups[0]['lr'])
         optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
     else:
         if args.mgpu == "true":
@@ -135,8 +126,10 @@ def file_weight_cnt(weight_name):
 def train(args):
     (
         device,
-        train_dataloader, val_dataloader,
-        Dice_loss, BCE_loss,
+        train_dataloader,
+        val_dataloader,
+        Dice_loss,
+        BCE_loss,
         perf, # DiceScore
         model,
         optimizer,
@@ -158,54 +151,48 @@ def train(args):
             )
     
     start_epoch = 1
-    min_val_loss = 1e6 # the lowest err on val_set so far
-    patience = 0
-    max_patience = args.patience
+    prev_best_test = None
+    loss_epoch = None 
+    
     if checkpoint is not None:
-        print(f"...Loading no. epoch, min_val_loss from {args.resume}")
+        print(f"...Loading STT epoch, prev_best_test from {args.resume}")
         start_epoch = checkpoint['epoch'] + 1 
-        min_val_loss = checkpoint['val_loss']
+        prev_best_test = checkpoint['test_measure_mean']
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
-        print("[INFO] lr after checkpoint:", optimizer.param_groups[0]['lr'])
-        patience = checkpoint['patience']
-        print(f"[INFO] patience: {patience}/{max_patience}")
-        if patience > max_patience:
-            print(f"[INFO] Training ended due to early stopping with max_patience={max_patience}")
-            return
+        loss_epoch = checkpoint['loss_epoch']
     else:
-        print(f"[INFO] max_patience = {max_patience}")
+        loss_epoch = []
 
     for epoch in range(start_epoch, args.epochs + 1):
         try:
-            train_loss = train_epoch(model, device, train_dataloader, optimizer, epoch, Dice_loss, BCE_loss) # loss of each epoch
-            val_loss, val_dice = test(model, device, val_dataloader, epoch, Dice_loss, BCE_loss, perf)
+            loss = train_epoch(model, device, train_dataloader, optimizer, epoch, Dice_loss, BCE_loss)
+            loss_epoch.append(loss)
+            test_measure_mean, test_measure_std = test(model, device, val_dataloader, epoch, perf)
         except KeyboardInterrupt:
             print("\nTraining interrupted by user")
             sys.exit(0)
-
-        # nếu có dùng learning rate scheduler -> update lr according to the scheduling scheme
-        if args.lrs == "true": 
-            scheduler.step(val_dice)
-
-        # save best current epoch (if any)
-        if val_loss < min_val_loss: 
-            patience = 0
-            min_val_loss = val_loss
+        if args.lrs == "true": # nếu có dùng learning rate scheduler -> update lr according to the scheduling scheme
+            scheduler.step(test_measure_mean)
+        if prev_best_test == None or test_measure_mean > prev_best_test: # save current best
             print(f"[INFO] Saving best weights to trained_weights/{args.name}{file_cnt}.pt")
             torch.save(
                 {
                     "epoch": epoch,
                     "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
-                    "train_loss": train_loss,
-                    "val_loss": val_loss, # val loss of THIS epoch
-                    "scheduler_state_dict": scheduler.state_dict(),
-                    "patience": patience
+                    "loss": loss,
+                    "test_measure_mean": test_measure_mean,
+                    "test_measure_std": test_measure_std,
+                    "scheduler_state_dict": scheduler.state_dict()
                 },
                 f"trained_weights/{args.name}{file_cnt}.pt",
             )
-
-        # save current epoch
+            prev_best_test = test_measure_mean
+        
+        # remove prev epoch 
+        # if os.path.exists(f"trained_weights/{args.name}-epoch_{epoch-1}.pt"):
+        #     os.remove(f"trained_weights/{args.name}-epoch_{epoch-1}.pt")
+        # save last.pt
         old_name = f"trained_weights/{args.name}-epoch_{epoch-1}.pt"
         print(f"[INFO] Saving epoch {epoch} to trained_weights/{args.name}-epoch_{epoch}.pt")
         torch.save(
@@ -213,20 +200,19 @@ def train(args):
                     "epoch": epoch,
                     "model_state_dict": model.state_dict() if args.mgpu == "false" else model.module.state_dict(),
                     "optimizer_state_dict": optimizer.state_dict(),
-                    "train_loss": train_loss, 
-                    "val_loss": min_val_loss, # the lowest val loss
+                    "loss": loss,
+                    "test_measure_mean": prev_best_test, # current best, not this epoch's dice
                     "scheduler_state_dict": scheduler.state_dict(),
-                    "patience": patience + 1 if val_loss > min_val_loss else patience
+                    "loss_epoch": loss_epoch
                 },
                 old_name, # ghi đè
-        )
+            )
         os.rename(old_name, f"trained_weights/{args.name}-epoch_{epoch}.pt")
-        
-        if val_loss > min_val_loss: # err does not improve
-            patience += 1
-            if patience > max_patience:
-                print(f"[INFO] Training ended due to early stopping with max_patience={max_patience}")
-                return
+    
+    # lưu loss_epoch
+    with open(f'loss_tracking_{args.name}.txt', 'w') as f:
+        for item in loss_epoch:
+            f.write(str(item) + '\n')
 
 
 def get_args():
@@ -240,7 +226,6 @@ def get_args():
     parser.add_argument("--learning-rate-scheduler-minimum", type=float, default=1e-6, dest="lrs_min")
     parser.add_argument("--multi-gpu", type=str, default="false", dest="mgpu", choices=["true", "false"])
     parser.add_argument('--resume', type=str, help='resume most recent training from the specified path')
-    parser.add_argument('--patience', type=int, default=15, help='max patience for early stopping')
 
     return parser.parse_args()
 
