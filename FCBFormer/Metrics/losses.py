@@ -28,7 +28,7 @@ class SoftDiceLoss(nn.Module):
         B = torch.cat((fp, extra), dim=1) # (B, 352^2 + extra)
         score = (
             (intersection.sum(1) + self.smooth)
-            / (torch.pow(B, 2.).sum(1) + torch.pow(m2, 2.).sum(1) + self.smooth)
+            / (B.sum(1) + m2.sum(1) + self.smooth)
         )
         
         # FDLv1

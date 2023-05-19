@@ -36,8 +36,9 @@ def eval(args):
     test_files_reduce = [os.path.basename(f) for f in test_files]
     prediction_files_reduce = [os.path.basename(f) for f in prediction_files]
     if test_files_reduce != prediction_files_reduce:
-        print(set(test_files_reduce).difference(set(prediction_files_reduce)))
-        raise Exception("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
+        tmp = set(test_files_reduce).difference(set(prediction_files_reduce))
+        if tmp:
+            raise Exception("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
 
     dice = []
     IoU = []
@@ -45,7 +46,7 @@ def eval(args):
     recall = []
 
     for i in range(len(test_files)):
-        if 'dice.csv' in prediction_files[i]:
+        if any([x in prediction_files[i] for x in ['dice.csv', 'recall.csv']]) :
             continue
         pred = np.mean(cv2.imread(prediction_files[i]) / 255, axis=2) > 0.5 # shape: (352,352)
         pred = np.ndarray.flatten(pred) # shape: 123904 
@@ -74,13 +75,13 @@ def eval(args):
         )
     
     # lưu tất cả dice theo thứ tự tăng dần vào csv
-    top_lows = dict(zip(prediction_files, dice))
+    top_lows = dict(zip(prediction_files, recall))
     top_lows = dict(sorted(top_lows.items(), key=lambda item: item[1]))
-    with open(f'{args.pred_dir[:-2]}/dice.csv', 'w') as f:
+    with open(f'{args.pred_dir[:-2]}/recall.csv', 'w') as f:
         for file_name, d in top_lows.items(): # d: dice
             file_name = os.path.basename(file_name) 
             f.write(f"{file_name},{d}\n")
-    print(f"[INFO] Saving dice.csv to {args.pred_dir[:-2]}")
+    print(f"[INFO] Saving recall.csv to {args.pred_dir[:-2]}")
 
     # print worst predictions
     top_lows = {i:item for i, item in enumerate(dice)}

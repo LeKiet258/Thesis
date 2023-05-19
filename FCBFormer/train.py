@@ -152,15 +152,21 @@ def train(args):
     
     start_epoch = 1
     prev_best_test = None
+    loss_epoch = None 
+    
     if checkpoint is not None:
         print(f"...Loading STT epoch, prev_best_test from {args.resume}")
         start_epoch = checkpoint['epoch'] + 1 
         prev_best_test = checkpoint['test_measure_mean']
         scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        loss_epoch = checkpoint['loss_epoch']
+    else:
+        loss_epoch = []
 
     for epoch in range(start_epoch, args.epochs + 1):
         try:
             loss = train_epoch(model, device, train_dataloader, optimizer, epoch, Dice_loss, BCE_loss)
+            loss_epoch.append(loss)
             test_measure_mean, test_measure_std = test(model, device, val_dataloader, epoch, perf)
         except KeyboardInterrupt:
             print("\nTraining interrupted by user")
@@ -196,11 +202,17 @@ def train(args):
                     "optimizer_state_dict": optimizer.state_dict(),
                     "loss": loss,
                     "test_measure_mean": prev_best_test, # current best, not this epoch's dice
-                    "scheduler_state_dict": scheduler.state_dict()
+                    "scheduler_state_dict": scheduler.state_dict(),
+                    "loss_epoch": loss_epoch
                 },
                 old_name, # ghi đè
             )
         os.rename(old_name, f"trained_weights/{args.name}-epoch_{epoch}.pt")
+    
+    # lưu loss_epoch
+    with open(f'loss_tracking_{args.name}.txt', 'w') as f:
+        for item in loss_epoch:
+            f.write(str(item) + '\n')
 
 
 def get_args():
