@@ -70,7 +70,6 @@ def build(args):
     model.to(device)
     tb = model.TB
     # print(tb)
-    # shit
     
     # register forward hooks on the layers of choice
     hooks = []
@@ -94,7 +93,6 @@ def build(args):
     
     for k in activation:
         print(f"{k}: {activation[k].shape}")
-    # shit
 
     # detach the hooks
     for hook in hooks:
