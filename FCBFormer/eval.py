@@ -37,7 +37,7 @@ def eval(args):
     prediction_files_reduce = [os.path.basename(f) for f in prediction_files]
     if test_files_reduce != prediction_files_reduce:
         print(set(test_files_reduce).difference(set(prediction_files_reduce)))
-        raise Exception("Thứ tự các file trong masks/* & trong pred_dir/* ko giống nhau")
+        raise Exception("All files in masks & pred_dir/* are not the same")
 
     dice = []
     IoU = []
@@ -116,7 +116,6 @@ def get_args():
     parser = argparse.ArgumentParser(description="Make predictions on specified dataset")
     parser.add_argument("--test-set", type=str, required=True, help="đường dẫn tới thư mục test_set. VD: data/Kvasir+CVC/TestDataset")
     parser.add_argument("--pred-dir", type=str, required=True, help="đường dẫn tới thư mục Predictions. VD: Predictions/Train on CIM/Test on ETIS")
-    # parser.add_argument("--generalisability", action='store_true', help="used when conduct generalisability test")
     parser.add_argument("--top-low", type=int, default=10) # mặc định override nếu execute nhiều lần
 
     return parser.parse_args()
