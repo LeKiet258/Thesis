@@ -1,7 +1,6 @@
 #Ported from https://github.com/whai362/PVT (unmodified)
 
 import torch
-from torch import Tensor
 import torch.nn as nn
 import torch.nn.functional as F
 from functools import partial
@@ -11,16 +10,7 @@ from timm.models.registry import register_model
 from timm.models.vision_transformer import _cfg
 import math
 
-class SGELU(nn.Module):
-    __constants__ = ['alpha']
 
-    def __init__(self, alpha: float = 0.1):
-        super(SGELU, self).__init__()
-        self.alpha = alpha
-
-    def forward(self, input: Tensor) -> Tensor:
-        return self.alpha*input * torch.tanh(math.sqrt(2/math.pi)*(input+0.044715*(input**3)))
- 
 class Mlp(nn.Module):
     def __init__(self, in_features, hidden_features=None, out_features=None, act_layer=nn.GELU, drop=0., linear=False):
         super().__init__()
@@ -28,9 +18,7 @@ class Mlp(nn.Module):
         hidden_features = hidden_features or in_features
         self.fc1 = nn.Linear(in_features, hidden_features)
         self.dwconv = DWConv(hidden_features)
-        #print('before SGELU')
         self.act = act_layer()
-        #print('after SGELU')
         self.fc2 = nn.Linear(hidden_features, out_features)
         self.drop = nn.Dropout(drop)
         self.linear = linear
@@ -57,7 +45,6 @@ class Mlp(nn.Module):
         x = self.fc1(x)
         if self.linear:
             x = self.relu(x)
-        #print('dwconv')
         x = self.dwconv(x, H, W)
         x = self.act(x)
         x = self.drop(x)
@@ -156,7 +143,7 @@ class Block(nn.Module):
         self.norm2 = norm_layer(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = Mlp(in_features=dim, hidden_features=mlp_hidden_dim, act_layer=act_layer, drop=drop, linear=linear)
-        #print('after MLP')
+
         self.apply(self._init_weights)
 
     def _init_weights(self, m):
@@ -226,7 +213,7 @@ class OverlapPatchEmbed(nn.Module):
 
         return x, H, W
 
-# 1 stage: patch embed + transformer encoder
+
 class PyramidVisionTransformerV2(nn.Module):
     def __init__(self, img_size=224, patch_size=16, in_chans=3, num_classes=1000, embed_dims=[64, 128, 256, 512],
                  num_heads=[1, 2, 4, 8], mlp_ratios=[4, 4, 4, 4], qkv_bias=False, qk_scale=None, drop_rate=0.,
