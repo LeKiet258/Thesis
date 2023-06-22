@@ -17,8 +17,6 @@ activation = {}
 def getActivation(name):
     # the hook signature
     def hook(model, input, output):
-        # print(f"input of {name}: {input[0].shape}")
-        # print(f"output of {name}: {output.shape}")
         activation[name] = output.detach()
     return hook
         
@@ -85,7 +83,6 @@ def build(args):
     
     for k in activation:
         print(f"{k}: {activation[k].shape}")
-    # shit
 
     # detach the hooks
     for hook in hooks:
